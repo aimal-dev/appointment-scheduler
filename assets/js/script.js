@@ -9,6 +9,7 @@
     
     // Initialize
     $(document).ready(function() {
+        loadBookedDates();
         renderCalendar();
         loadTimeSlots();
         initResponsiveFeatures();
@@ -20,6 +21,7 @@
                 currentMonth = 11;
                 currentYear--;
             }
+            loadBookedDates();
             renderCalendar();
         });
         
@@ -29,6 +31,7 @@
                 currentMonth = 0;
                 currentYear++;
             }
+            loadBookedDates();
             renderCalendar();
         });
         
@@ -137,15 +140,21 @@
         const today = new Date();
         const todayStr = formatDate(today);
         
+        // Get booked dates for this month
+        const bookedDates = getBookedDatesForMonth(currentYear, currentMonth + 1);
+        
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(currentYear, currentMonth, day);
             const dateStr = formatDate(date);
             const isPast = date < today && dateStr !== todayStr;
-            const isAvailable = !isPast && isDateAvailable(date);
+            const isBooked = bookedDates.includes(dateStr);
+            const isAvailable = !isPast && !isBooked && isDateAvailable(date);
             
             let classes = 'calendar-day';
             if (isPast) {
                 classes += ' past';
+            } else if (isBooked) {
+                classes += ' booked';
             } else if (isAvailable) {
                 classes += ' available';
             }
@@ -157,9 +166,10 @@
             const dayLabel = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
             
             calendarHTML += `
-                <div class="${classes}" data-date="${dateStr}">
+                <div class="${classes}" data-date="${dateStr}" title="${isBooked ? 'Appointment Booked' : ''}">
                     <span class="day-label">${dayLabel}</span>
                     <span class="day-number">${day}</span>
+                    ${isBooked ? '<span class="booked-badge">Booked</span>' : ''}
                 </div>
             `;
         }
@@ -174,10 +184,16 @@
         
         $('.calendar-grid').html(calendarHTML);
         
-        // Date selection
+        // Date selection - only allow available dates
         $('.calendar-day.available').on('click', function() {
             const date = $(this).data('date');
             selectDate(date);
+        });
+        
+        // Prevent clicking on booked dates
+        $('.calendar-day.booked').on('click', function(e) {
+            e.preventDefault();
+            return false;
         });
     }
     
@@ -223,10 +239,12 @@
             
             // Load time slots for this date
             const promise = new Promise(function(resolve) {
-                loadTimeSlotsForDate(dateStr, function(slots) {
+                loadTimeSlotsForDate(dateStr, function(slots, isDateBooked) {
                     const daySlotsHTML = [];
                     
-                    if (slots.length === 0) {
+                    if (isDateBooked) {
+                        daySlotsHTML.push('<div class="time-slot-placeholder"><span class="booked-message">Appointment Booked</span></div>');
+                    } else if (slots.length === 0) {
                         daySlotsHTML.push('<div class="time-slot-placeholder"></div>');
                     } else {
                         slots.forEach(function(slot) {
@@ -236,7 +254,7 @@
                                 );
                             } else {
                                 daySlotsHTML.push(
-                                    `<div class="time-slot unavailable">${slot.time}</div>`
+                                    `<div class="time-slot unavailable" title="Already Booked">${slot.time} <span class="booked-text">(Booked)</span></div>`
                                 );
                             }
                         });
@@ -277,13 +295,13 @@
             },
             success: function(response) {
                 if (response.success) {
-                    callback(response.data.time_slots);
+                    callback(response.data.time_slots, response.data.is_date_booked || false);
                 } else {
-                    callback([]);
+                    callback([], false);
                 }
             },
             error: function() {
-                callback([]);
+                callback([], false);
             }
         });
     }
@@ -332,11 +350,28 @@
                     messageEl.removeClass('error').addClass('success')
                         .text(response.data.message).show();
                     
+                    // Check if Google account and auto-add to calendar
+                    if (response.data.is_google_account && response.data.calendar_link) {
+                        // Auto-open Google Calendar for Google accounts
+                        setTimeout(function() {
+                            window.open(response.data.calendar_link, '_blank');
+                            messageEl.append('<br><small>Opening Google Calendar to add event...</small>');
+                        }, 500);
+                    } else if (response.data.calendar_link) {
+                        // Show option to add to calendar for non-Google accounts
+                        const calendarBtn = $('<button type="button" class="button" style="margin-top: 10px;">Add to Google Calendar</button>');
+                        calendarBtn.on('click', function() {
+                            window.open(response.data.calendar_link, '_blank');
+                        });
+                        messageEl.append('<br>').append(calendarBtn);
+                    }
+                    
                     setTimeout(function() {
                         closeModal();
-                        // Reload time slots to update availability
+                        // Reload booked dates and time slots to update availability
+                        loadBookedDates();
                         loadTimeSlots();
-                    }, 2000);
+                    }, response.data.is_google_account ? 3000 : 2000);
                 } else {
                     messageEl.removeClass('success').addClass('error')
                         .text(response.data.message || 'An error occurred. Please try again.').show();
@@ -378,6 +413,47 @@
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         return date >= today;
+    }
+    
+    // Cache for booked dates
+    let bookedDatesCache = [];
+    let bookedDatesCacheMonth = null;
+    let bookedDatesCacheYear = null;
+    
+    function loadBookedDates() {
+        // Check cache first
+        if (bookedDatesCacheMonth === currentMonth && bookedDatesCacheYear === currentYear) {
+            return; // Already loaded
+        }
+        
+        $.ajax({
+            url: appointmentScheduler.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_booked_dates',
+                year: currentYear,
+                month: currentMonth + 1, // JavaScript months are 0-indexed
+                nonce: appointmentScheduler.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    bookedDatesCache = response.data.booked_dates || [];
+                    bookedDatesCacheMonth = currentMonth;
+                    bookedDatesCacheYear = currentYear;
+                    renderCalendar(); // Re-render calendar with booked dates
+                }
+            },
+            error: function() {
+                bookedDatesCache = [];
+            }
+        });
+    }
+    
+    function getBookedDatesForMonth(year, month) {
+        if (bookedDatesCacheMonth === month - 1 && bookedDatesCacheYear === year) {
+            return bookedDatesCache;
+        }
+        return [];
     }
     
 })(jQuery);

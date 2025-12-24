@@ -30,6 +30,11 @@ if (isset($_POST['submit'])) {
     }
     update_option('appointment_additional_email', $additional_emails);
     update_option('appointment_timezone', sanitize_text_field($_POST['appointment_timezone']));
+    update_option('appointment_reminder_enabled', isset($_POST['appointment_reminder_enabled']) ? 'yes' : 'no');
+    update_option('appointment_reminder_times', isset($_POST['appointment_reminder_times']) ? $_POST['appointment_reminder_times'] : array());
+    update_option('google_calendar_client_id', sanitize_text_field($_POST['google_calendar_client_id']));
+    update_option('google_calendar_client_secret', sanitize_text_field($_POST['google_calendar_client_secret']));
+    update_option('google_calendar_enabled', isset($_POST['google_calendar_enabled']) ? 'yes' : 'no');
     
     echo '<div class="notice notice-success"><p>Settings saved successfully!</p></div>';
 }
@@ -40,6 +45,11 @@ $interval = get_option('appointment_interval', 30);
 $admin_email = get_option('appointment_admin_email', get_option('admin_email'));
 $additional_email = get_option('appointment_additional_email', '');
 $selected_timezone = get_option('appointment_timezone', 'Europe/London');
+$reminder_enabled = get_option('appointment_reminder_enabled', 'yes');
+$reminder_times = get_option('appointment_reminder_times', array('15min', '1hr', '1day'));
+if (!is_array($reminder_times)) {
+    $reminder_times = array();
+}
 ?>
 
 <div class="wrap">
@@ -140,12 +150,134 @@ $selected_timezone = get_option('appointment_timezone', 'Europe/London');
                     <p class="description">Select the timezone for displaying appointment times.</p>
                 </td>
             </tr>
+            
+            <tr>
+                <th scope="row">
+                    <label>Email Reminders</label>
+                </th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="appointment_reminder_enabled" value="yes" 
+                               <?php checked($reminder_enabled, 'yes'); ?>>
+                        Enable email reminders before appointments
+                    </label>
+                    <p class="description">Send automatic email reminders to customers and admin before appointments.</p>
+                </td>
+            </tr>
+            
+            <tr>
+                <th scope="row">
+                    <label>Reminder Times</label>
+                </th>
+                <td>
+                    <fieldset>
+                        <label>
+                            <input type="checkbox" name="appointment_reminder_times[]" value="1day" 
+                                   <?php checked(in_array('1day', $reminder_times)); ?>>
+                            1 day before
+                        </label><br>
+                        <label>
+                            <input type="checkbox" name="appointment_reminder_times[]" value="1hr" 
+                                   <?php checked(in_array('1hr', $reminder_times)); ?>>
+                            1 hour before
+                        </label><br>
+                        <label>
+                            <input type="checkbox" name="appointment_reminder_times[]" value="15min" 
+                                   <?php checked(in_array('15min', $reminder_times)); ?>>
+                            15 minutes before
+                        </label>
+                    </fieldset>
+                    <p class="description">Select when to send reminder emails. Reminders include Google Meet link if available.</p>
+                </td>
+            </tr>
         </table>
         
         <p class="submit">
             <input type="submit" name="submit" id="submit" class="button button-primary" value="Save Changes">
         </p>
     </form>
+    
+    <hr>
+    
+    <h2>Google Calendar API Integration</h2>
+    <p>Enable automatic Google Calendar event creation with Meet links. <strong>This requires Google Cloud Project setup.</strong></p>
+    
+    <?php
+    // Handle OAuth revoke
+    if (isset($_GET['revoke_google_auth']) && $_GET['revoke_google_auth'] == '1') {
+        delete_option('google_calendar_access_token');
+        delete_option('google_calendar_refresh_token');
+        echo '<div class="notice notice-success"><p>Google Calendar access revoked successfully!</p></div>';
+    }
+    ?>
+    
+    <form method="post" action="">
+        <?php wp_nonce_field('appointment_scheduler_settings'); ?>
+        
+        <table class="form-table">
+            <tr>
+                <th scope="row">
+                    <label for="google_calendar_enabled">Enable Google Calendar API</label>
+                </th>
+                <td>
+                    <input type="checkbox" id="google_calendar_enabled" name="google_calendar_enabled" value="yes" <?php checked($google_calendar_enabled, 'yes'); ?>>
+                    <p class="description">Enable automatic calendar event creation with Meet links</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">
+                    <label for="google_calendar_client_id">Google Client ID</label>
+                </th>
+                <td>
+                    <input type="text" id="google_calendar_client_id" name="google_calendar_client_id" value="<?php echo esc_attr($google_client_id); ?>" class="regular-text">
+                    <p class="description">Get this from <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a></p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">
+                    <label for="google_calendar_client_secret">Google Client Secret</label>
+                </th>
+                <td>
+                    <input type="password" id="google_calendar_client_secret" name="google_calendar_client_secret" value="<?php echo esc_attr($google_client_secret); ?>" class="regular-text">
+                    <p class="description">Keep this secret secure</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">OAuth Status</th>
+                <td>
+                    <?php if (!empty($google_access_token)): ?>
+                        <span style="color: green;">✓ Connected</span>
+                        <a href="<?php echo admin_url('admin.php?page=appointment-scheduler-settings&revoke_google_auth=1'); ?>" class="button" style="margin-left: 10px;">Revoke Access</a>
+                    <?php else: ?>
+                        <span style="color: orange;">⚠ Not Connected</span>
+                        <?php if (!empty($google_client_id) && !empty($google_client_secret)): ?>
+                            <a href="<?php echo admin_url('admin.php?page=appointment-scheduler-settings&google_auth=1'); ?>" class="button button-primary" style="margin-left: 10px;">Connect Google Calendar</a>
+                        <?php else: ?>
+                            <p class="description">Please enter Client ID and Secret first, then click "Connect Google Calendar"</p>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </td>
+            </tr>
+        </table>
+        
+        <p class="submit">
+            <input type="submit" name="submit" id="submit" class="button button-primary" value="Save Google Calendar Settings">
+        </p>
+    </form>
+    
+    <div class="card" style="max-width: 800px; margin-top: 20px;">
+        <h3>Setup Instructions:</h3>
+        <ol>
+            <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+            <li>Create a new project or select existing one</li>
+            <li>Enable "Google Calendar API" from APIs & Services</li>
+            <li>Go to "Credentials" → "Create Credentials" → "OAuth 2.0 Client ID"</li>
+            <li>Application type: "Web application"</li>
+            <li>Authorized redirect URIs: <code><?php echo admin_url('admin.php?page=appointment-scheduler-settings&google_oauth_callback=1'); ?></code></li>
+            <li>Copy Client ID and Client Secret to fields above</li>
+            <li>Click "Connect Google Calendar" to authorize</li>
+        </ol>
+    </div>
     
     <hr>
     

@@ -201,6 +201,56 @@
     color: #999;
 }
 
+.calendar-day.booked {
+    color: #dc2626 !important;
+    background: #fee2e2 !important;
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+    position: relative !important;
+}
+
+.calendar-day.booked .day-label {
+    color: #dc2626 !important;
+}
+
+.calendar-day.booked .day-number {
+    color: #dc2626 !important;
+}
+
+.calendar-day.booked .booked-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 8px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.calendar-day.booked:hover {
+    background: #fee2e2 !important;
+    transform: none !important;
+}
+
+.time-slot.unavailable .booked-text {
+    font-size: 10px;
+    color: #dc2626;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.time-slot-placeholder .booked-message {
+    color: #dc2626;
+    font-weight: 600;
+    font-size: 14px;
+    text-align: center;
+    padding: 10px;
+}
+
 /* Time Slots Section */
 .appointment-times-section {
     flex: 1;
@@ -881,6 +931,53 @@
     .time-slot {
         padding: 12px 15px;
     }
+}
+
+/* Admin Meet Link Styles */
+.meet-link-container {
+    max-width: 300px;
+}
+
+.meet-link-display {
+    color: #2563eb !important;
+    text-decoration: none !important;
+    font-size: 12px;
+    word-break: break-all;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.meet-link-display:hover {
+    text-decoration: underline !important;
+}
+
+.no-meet-link {
+    color: #999;
+    font-style: italic;
+    font-size: 12px;
+}
+
+.edit-meet-link {
+    color: #2563eb !important;
+    text-decoration: none !important;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.edit-meet-link:hover {
+    text-decoration: underline !important;
+}
+
+.meet-link-edit-form {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.meet-link-input {
+    flex: 1;
+    min-width: 250px;
 }
 
 /* Print styles */
