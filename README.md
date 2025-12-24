@@ -6,23 +6,23 @@ A beautiful, custom appointment scheduling plugin for WordPress that matches the
 
 ### Main Appointment Scheduler Interface
 
-![Appointment Scheduler Interface](screenshots/appointment-scheduler-main.png)
+![Appointment Scheduler Interface](./screenshots/appointment-scheduler-main.png)
 
 *The main appointment scheduling interface showing the calendar on the left and available time slots on the right.*
 
 ### Admin Settings Page
 
-![Admin Settings](screenshots/appointment-scheduler-settings.png)
+![Admin Settings](./screenshots/appointment-scheduler-settings.png)
 
 *Admin settings page where you can configure working hours, time intervals, timezone, and email notifications.*
 
 ### Admin Bookings Dashboard
 
-![Admin Bookings](screenshots/appointment-scheduler-bookings.png)
+![Admin Bookings](./screenshots/appointment-scheduler-bookings.png)
 
 *Admin dashboard showing all booked appointments with customer details.*
 
-**Note:** To add screenshots, create a `screenshots` folder in the plugin directory and add your screenshot images. Then update the image paths above.
+**Note:** Screenshot images should be placed in the `screenshots` folder. See `screenshots/README.md` for instructions on taking and adding screenshots.
 
 ## Features
 
