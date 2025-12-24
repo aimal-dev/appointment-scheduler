@@ -4,25 +4,23 @@ A beautiful, custom appointment scheduling plugin for WordPress that matches the
 
 ## Screenshots
 
-> **Note:** Screenshots will be added soon. To add screenshots, see instructions in `screenshots/README.md`
-
 ### Main Appointment Scheduler Interface
 
-*The main appointment scheduling interface showing the calendar on the left and available time slots on the right. Features a clean blue-themed design with responsive layout.*
+![Appointment Scheduler Interface](./screenshots/appointment-scheduler-main.png)
 
-**Screenshot:** `screenshots/appointment-scheduler-main.png` (to be added)
+*The main appointment scheduling interface showing the calendar on the left and available time slots on the right. Features a clean blue-themed design with responsive layout. Users can select dates from the calendar and choose from available time slots displayed in a grid format.*
 
 ### Admin Settings Page
 
-*Admin settings page where you can configure working hours, time intervals, timezone, and email notifications. Supports multiple email addresses and timezone selection.*
+![Admin Settings](./screenshots/appointment-scheduler-settings.png)
 
-**Screenshot:** `screenshots/appointment-scheduler-settings.png` (to be added)
+*Admin settings page where you can configure working hours (start time, end time), time slot intervals, admin email, additional emails (comma-separated), and timezone selection. The page also includes shortcode usage instructions.*
 
 ### Admin Bookings Dashboard
 
-*Admin dashboard showing all booked appointments with customer details including name, email, phone, date, time, and messages.*
+*Admin dashboard showing all booked appointments with customer details including name, email, phone, appointment date, time, and messages. Allows administrators to view and manage all appointment bookings.*
 
-**Screenshot:** `screenshots/appointment-scheduler-bookings.png` (to be added)
+**Note:** To add the booking dashboard screenshot, save it as `screenshots/appointment-scheduler-bookings.png`
 
 ## Features
 

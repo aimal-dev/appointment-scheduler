@@ -40,6 +40,8 @@ class Appointment_Scheduler {
         add_action('wp_ajax_nopriv_get_time_slots', array($this, 'get_time_slots'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+        add_action('wp_ajax_delete_appointment', array($this, 'delete_appointment'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
     }
     
     public function init() {
@@ -306,6 +308,55 @@ class Appointment_Scheduler {
         register_setting('appointment_scheduler_settings', 'appointment_additional_email');
         register_setting('appointment_scheduler_settings', 'appointment_timezone');
         register_setting('appointment_scheduler_settings', 'appointment_blocked_times');
+    }
+    
+    public function enqueue_admin_scripts($hook) {
+        if ($hook !== 'toplevel_page_appointment-scheduler') {
+            return;
+        }
+        
+        wp_enqueue_script(
+            'appointment-scheduler-admin',
+            APPOINTMENT_SCHEDULER_PLUGIN_URL . 'assets/js/admin.js',
+            array('jquery'),
+            APPOINTMENT_SCHEDULER_VERSION,
+            true
+        );
+        
+        wp_localize_script('appointment-scheduler-admin', 'appointmentAdmin', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('appointment_admin_nonce'),
+            'confirm_delete' => __('Are you sure you want to delete this appointment? This action cannot be undone.', 'appointment-scheduler')
+        ));
+    }
+    
+    public function delete_appointment() {
+        check_ajax_referer('appointment_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'You do not have permission to delete appointments.'));
+        }
+        
+        $appointment_id = isset($_POST['appointment_id']) ? intval($_POST['appointment_id']) : 0;
+        
+        if (empty($appointment_id)) {
+            wp_send_json_error(array('message' => 'Invalid appointment ID.'));
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'appointment_bookings';
+        
+        $deleted = $wpdb->delete(
+            $table_name,
+            array('id' => $appointment_id),
+            array('%d')
+        );
+        
+        if ($deleted) {
+            wp_send_json_success(array('message' => 'Appointment deleted successfully.'));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to delete appointment.'));
+        }
     }
     
     public function render_admin_page() {
