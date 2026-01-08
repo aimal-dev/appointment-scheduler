@@ -98,6 +98,12 @@ if (!empty($appointment_timezone)) {
                 </div>
                 
                 <div class="form-group">
+                    <label for="appointmentGuests">Guest Emails (Optional)</label>
+                    <input type="text" id="appointmentGuests" name="guest_emails" placeholder="Separate multiple emails with commas">
+                    <small class="form-text">Add colleagues to this meeting invitation.</small>
+                </div>
+                
+                <div class="form-group">
                     <label for="appointmentMessage">Message (Optional)</label>
                     <textarea id="appointmentMessage" name="message" rows="4"></textarea>
                 </div>

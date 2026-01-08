@@ -3,7 +3,7 @@
  * Plugin Name: Appointment Scheduler
  * Plugin URI: https://example.com/appointment-scheduler
  * Description: A beautiful appointment scheduling system with calendar and time slot selection. Sends email notifications to admin.
- * Version: 1.1.0
+ * Version: 1.3.0
  * Author: M.Aimal
  * Author URI: https://example.com
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('APPOINTMENT_SCHEDULER_VERSION', '1.1.0');
+define('APPOINTMENT_SCHEDULER_VERSION', '1.3.0');
 define('APPOINTMENT_SCHEDULER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('APPOINTMENT_SCHEDULER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -55,6 +55,106 @@ class Appointment_Scheduler {
     public function init() {
         // Register shortcode
         add_shortcode('appointment_scheduler', array($this, 'render_scheduler'));
+        
+        // Handle cancellation
+        if (isset($_GET['appointment_action']) && $_GET['appointment_action'] === 'cancel') {
+            $this->handle_cancellation();
+        }
+    }
+    
+    public function handle_cancellation() {
+        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+        $token = isset($_GET['token']) ? sanitize_text_field($_GET['token']) : '';
+        
+        if (!$id || !$token) {
+            wp_die('Invalid cancellation request.');
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'appointment_bookings';
+        
+        $appointment = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d AND cancellation_token = %s",
+            $id,
+            $token
+        ));
+        
+        if (!$appointment) {
+            wp_die('Invalid cancellation token or appointment not found.');
+        }
+        
+        if ($appointment->status === 'cancelled') {
+            wp_die('This appointment has already been cancelled.');
+        }
+        
+        // Update status
+        $wpdb->update(
+            $table_name,
+            array('status' => 'cancelled'),
+            array('id' => $id),
+            array('%s'),
+            array('%d')
+        );
+        
+        // Send cancellation emails
+        $this->send_cancellation_emails($appointment);
+        
+        // Show success message
+        wp_die('Your appointment has been successfully cancelled. A confirmation email has been sent.', 'Appointment Cancelled');
+    }
+    
+    private function send_cancellation_emails($appointment) {
+        $date_formatted = date('F j, Y', strtotime($appointment->appointment_date));
+        $time_formatted = date('g:i A', strtotime($appointment->appointment_time));
+        
+        $subject = sprintf('Appointment Cancelled - %s', $date_formatted);
+        $blog_name = get_bloginfo('name');
+        $admin_email = get_option('appointment_admin_email', get_option('admin_email'));
+        
+        // Headers with specific "From" to avoid "Unknown"
+        $headers = array(
+            'Content-Type: text/plain; charset=UTF-8',
+            "From: $blog_name <$admin_email>"
+        );
+        
+        // 1. Email to User
+        $user_body = "Dear {$appointment->name},\n\n";
+        $user_body .= "Your appointment scheduled for $date_formatted at $time_formatted has been cancelled successfully.\n\n";
+        $user_body .= "If you did not initiate this cancellation, please contact us immediately.\n\n";
+        $user_body .= "---\n$blog_name";
+        
+        wp_mail($appointment->email, $subject, $user_body, $headers);
+        
+        // 2. Email to Admin
+        $admin_body = "Appointment Cancelled\n\n";
+        $admin_body .= "The following appointment has been cancelled by the user:\n\n";
+        $admin_body .= "Name: {$appointment->name}\n";
+        $admin_body .= "Email: {$appointment->email}\n";
+        $admin_body .= "Date: $date_formatted at $time_formatted\n\n";
+        $admin_body .= "---\nAppointment Scheduler";
+        
+        wp_mail($admin_email, $subject, $admin_body, $headers);
+        
+        // 3. Email to Additional Emails
+        $additional_emails = get_option('appointment_additional_email', '');
+        if (!empty($additional_emails)) {
+            $email_array = array_map('trim', explode(',', $additional_emails));
+            foreach ($email_array as $additional_email) {
+                if (is_email($additional_email)) {
+                    wp_mail($additional_email, $subject, $admin_body, $headers);
+                }
+            }
+        }
+        
+        // 4. Email to Guests
+        if (!empty($appointment->guest_emails)) {
+            $guest_email_array = array_map('trim', explode(',', $appointment->guest_emails));
+            foreach ($guest_email_array as $guest_email) {
+                if (is_email($guest_email)) {
+                    wp_mail($guest_email, $subject, $user_body, $headers);
+                }
+            }
+        }
     }
     
     public function enqueue_scripts() {
@@ -76,7 +176,8 @@ class Appointment_Scheduler {
         wp_localize_script('appointment-scheduler-script', 'appointmentScheduler', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('appointment_scheduler_nonce'),
-            'timezone' => $this->get_timezone_string()
+            'timezone' => $this->get_timezone_string(),
+            'interval' => get_option('appointment_interval', 30)
         ));
     }
     
@@ -142,13 +243,14 @@ class Appointment_Scheduler {
             $time_str = date('g:ia', $current);
             $time_value = date('H:i', $current);
             
-            // Check if slot is available (you can add custom logic here)
-            $is_available = $this->is_slot_available($date, $time_value);
+            // detailed status check
+            $status = $this->check_slot_status($date, $time_value);
             
             $slots[] = array(
                 'time' => $time_str,
                 'value' => $time_value,
-                'available' => $is_available
+                'available' => ($status === 'available'),
+                'status' => $status
             );
             
             $current = strtotime('+' . $interval . ' minutes', $current);
@@ -157,37 +259,40 @@ class Appointment_Scheduler {
         return $slots;
     }
     
-    private function is_slot_available($date, $time) {
+    private function check_slot_status($date, $time) {
         global $wpdb;
         
         // Check if date/time is in the past
         if (strtotime($date . ' ' . $time) < current_time('timestamp')) {
-            return false;
+            return 'past';
         }
         
-        // Check if this slot is already booked in the database
+        // Check database
         $table_name = $wpdb->prefix . 'appointment_bookings';
         $existing = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_name WHERE appointment_date = %s AND appointment_time = %s",
+            "SELECT COUNT(*) FROM $table_name WHERE appointment_date = %s AND appointment_time = %s AND status != 'cancelled'",
             $date,
             $time
         ));
         
         if ($existing > 0) {
-            return false; // Slot is already booked
+            return 'booked';
         }
         
-        // Get blocked times from settings
+        // Check blocked times
         $blocked_times = get_option('appointment_blocked_times', array());
-        $date_time = $date . ' ' . $time;
-        
         foreach ($blocked_times as $blocked) {
             if ($blocked['date'] === $date && $blocked['time'] === $time) {
-                return false;
+                return 'booked';
             }
         }
         
-        return true;
+        return 'available';
+    }
+    
+    private function is_slot_available($date, $time) {
+        // Wrapper for legacy compatibility if needed
+        return $this->check_slot_status($date, $time) === 'available';
     }
     
     private function is_date_booked($date) {
@@ -237,19 +342,21 @@ class Appointment_Scheduler {
         $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';
         $time = isset($_POST['time']) ? sanitize_text_field($_POST['time']) : '';
         $message = isset($_POST['message']) ? sanitize_textarea_field($_POST['message']) : '';
+        $guest_emails = isset($_POST['guest_emails']) ? sanitize_text_field($_POST['guest_emails']) : '';
         
         // Validation
         if (empty($name) || empty($email) || empty($date) || empty($time)) {
             wp_send_json_error(array('message' => 'Please fill in all required fields.'));
         }
         
+        
         if (!is_email($email)) {
             wp_send_json_error(array('message' => 'Please enter a valid email address.'));
         }
         
-        // Check if this slot is already booked
-        if (!$this->is_slot_available($date, $time)) {
-            wp_send_json_error(array('message' => 'This time slot is already booked. Please select another time.'));
+        // Check if this slot is available
+        if ($this->check_slot_status($date, $time) !== 'available') {
+            wp_send_json_error(array('message' => 'This time slot is no longer available.'));
         }
         
         // Get admin email from settings or use default
@@ -270,11 +377,30 @@ class Appointment_Scheduler {
         if ($message) {
             $admin_email_body .= "Message: $message\n";
         }
-        $admin_email_body .= "\nGoogle Meet Link: \n"; // Will be replaced with actual link after saving
+        if ($guest_emails) {
+            $admin_email_body .= "Guests: $guest_emails\n";
+        }
+        // Generate cancellation token
+        $cancellation_token = bin2hex(random_bytes(16));
+        
+        // Save to database FIRST to get appointment ID
+        $appointment_id = $this->save_appointment($name, $email, $phone, $date, $time, $message, $guest_emails, $cancellation_token);
+        
+        if (!$appointment_id) {
+            wp_send_json_error(array(
+                'message' => 'There was an error saving your appointment. Please try again.'
+            ));
+        }
+        
+        // Generate cancellation link
+        $cancel_link = home_url("/?appointment_action=cancel&id=$appointment_id&token=$cancellation_token");
+        
+        // Update Admin Email Body
+        $admin_email_body .= "\nGoogle Meet Link: \n"; // Placeholder
         $admin_email_body .= "\n---\n";
         $admin_email_body .= "This email was sent from your Appointment Scheduler plugin.";
-        
-        // Send email to user (confirmation) - meet link will be added after saving
+
+        // Send email to user (confirmation)
         $user_subject = sprintf('Appointment Confirmation - %s', $date_formatted);
         $user_email_body = "Dear $name,\n\n";
         $user_email_body .= "Thank you for booking an appointment with us!\n\n";
@@ -288,17 +414,21 @@ class Appointment_Scheduler {
             $user_email_body .= "Your Message: $message\n";
         }
         $user_email_body .= "\n";
-        $user_email_body .= "Google Meet Link: \n"; // Will be replaced with actual link after saving
+        $user_email_body .= "Google Meet Link: \n"; // Placeholder
         $user_email_body .= "We look forward to meeting with you!\n\n";
-        $user_email_body .= "If you need to reschedule or cancel, please contact us.\n\n";
+        $user_email_body .= "To cancel this appointment, please click here:\n$cancel_link\n\n";
         $user_email_body .= "---\n";
         $user_email_body .= "This is an automated confirmation email from Appointment Scheduler.";
+
+        // Prepare Headers - Fix "Unknown Sender"
+        $blog_name = get_bloginfo('name');
+        $headers = array(
+            'Content-Type: text/plain; charset=UTF-8',
+            "From: $blog_name <$admin_email>"
+        );
         
         // Get additional emails from settings (can be multiple emails separated by comma)
         $additional_emails = get_option('appointment_additional_email', '');
-        
-        // Save to database FIRST to get appointment ID
-        $appointment_id = $this->save_appointment($name, $email, $phone, $date, $time, $message);
         
         if (!$appointment_id) {
             wp_send_json_error(array(
@@ -328,7 +458,6 @@ class Appointment_Scheduler {
         }
         
         // Send emails
-        $headers = array('Content-Type: text/plain; charset=UTF-8');
         $admin_sent = wp_mail($admin_email, $admin_subject, $admin_email_body, $headers);
         $user_sent = wp_mail($email, $user_subject, $user_email_body, $headers);
         
@@ -341,6 +470,23 @@ class Appointment_Scheduler {
                 if (is_email($additional_email)) {
                     wp_mail($additional_email, $admin_subject, $admin_email_body, $headers);
                     $additional_sent = true;
+                }
+            }
+        }
+        
+        // Send email to guest emails if provided
+        if (!empty($guest_emails)) {
+            // Split by comma and send to each email
+            $guest_email_array = array_map('trim', explode(',', $guest_emails));
+            foreach ($guest_email_array as $guest_email) {
+                if (is_email($guest_email)) {
+                    // Send user version of email to guests BUT REMOVE CANCELLATION LINK
+                    $guest_body = str_replace(
+                        "To cancel this appointment, please click here:\n$cancel_link\n\n", 
+                        "", 
+                        $user_email_body
+                    );
+                    wp_mail($guest_email, $user_subject, $guest_body, $headers);
                 }
             }
         }
@@ -382,7 +528,7 @@ class Appointment_Scheduler {
         }
     }
     
-    private function save_appointment($name, $email, $phone, $date, $time, $message) {
+    private function save_appointment($name, $email, $phone, $date, $time, $message, $guest_emails = '', $token = '') {
         global $wpdb;
         $table_name = $wpdb->prefix . 'appointment_bookings';
         
@@ -396,9 +542,12 @@ class Appointment_Scheduler {
                 'appointment_date' => $date,
                 'appointment_time' => $time,
                 'message' => $message,
+                'guest_emails' => $guest_emails,
+                'status' => 'booked',
+                'cancellation_token' => $token,
                 'created_at' => current_time('mysql')
             ),
-            array('%s', '%s', '%s', '%s', '%s', '%s', '%s')
+            array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
         );
         
         // Generate meet link with actual ID for uniqueness
@@ -497,6 +646,7 @@ class Appointment_Scheduler {
             "SELECT * FROM $table_name 
             WHERE CONCAT(appointment_date, ' ', appointment_time) >= %s 
             AND CONCAT(appointment_date, ' ', appointment_time) <= DATE_ADD(%s, INTERVAL 24 HOUR)
+            AND status = 'booked'
             ORDER BY appointment_date, appointment_time",
             $current_time,
             $current_time
@@ -723,6 +873,16 @@ class Appointment_Scheduler {
             foreach ($email_array as $additional_email) {
                 if (is_email($additional_email)) {
                     wp_mail($additional_email, $subject, $email_body, $headers);
+                }
+            }
+        }
+        
+        // Send to guest emails
+        if (!empty($appointment->guest_emails)) {
+            $guest_email_array = array_map('trim', explode(',', $appointment->guest_emails));
+            foreach ($guest_email_array as $guest_email) {
+                if (is_email($guest_email)) {
+                    wp_mail($guest_email, $subject, $email_body, $headers);
                 }
             }
         }
@@ -988,6 +1148,16 @@ class Appointment_Scheduler {
             )
         );
         
+        // Add guest emails to attendees
+        if (!empty($appointment->guest_emails)) {
+            $guest_emails = array_map('trim', explode(',', $appointment->guest_emails));
+            foreach ($guest_emails as $guest_email) {
+                if (is_email($guest_email)) {
+                    $event_data['attendees'][] = array('email' => $guest_email);
+                }
+            }
+        }
+        
         $api_url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1';
         $response = wp_remote_post($api_url, array(
             'headers' => array(
@@ -1119,7 +1289,10 @@ class Appointment_Scheduler {
             appointment_date date NOT NULL,
             appointment_time time NOT NULL,
             message text,
+            guest_emails text,
             meet_link varchar(255),
+            status varchar(20) DEFAULT 'booked',
+            cancellation_token varchar(64),
             reminder_sent_15min tinyint(1) DEFAULT 0,
             reminder_sent_1hr tinyint(1) DEFAULT 0,
             reminder_sent_1day tinyint(1) DEFAULT 0,
@@ -1135,8 +1308,17 @@ class Appointment_Scheduler {
         if (!in_array('meet_link', $columns)) {
             $wpdb->query("ALTER TABLE $table_name ADD COLUMN meet_link varchar(255) AFTER message");
         }
+        if (!in_array('guest_emails', $columns)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN guest_emails text AFTER message");
+        }
+        if (!in_array('status', $columns)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN status varchar(20) DEFAULT 'booked' AFTER meet_link");
+        }
+        if (!in_array('cancellation_token', $columns)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN cancellation_token varchar(64) AFTER status");
+        }
         if (!in_array('reminder_sent_15min', $columns)) {
-            $wpdb->query("ALTER TABLE $table_name ADD COLUMN reminder_sent_15min tinyint(1) DEFAULT 0 AFTER meet_link");
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN reminder_sent_15min tinyint(1) DEFAULT 0 AFTER cancellation_token");
         }
         if (!in_array('reminder_sent_1hr', $columns)) {
             $wpdb->query("ALTER TABLE $table_name ADD COLUMN reminder_sent_1hr tinyint(1) DEFAULT 0 AFTER reminder_sent_15min");

@@ -2,7 +2,7 @@
 
 A beautiful and feature-rich appointment scheduling system for WordPress with calendar integration, Google Meet links, email notifications, and automatic reminders.
 
-**Version:** 1.1.0  
+**Version:** 1.3.0  
 **Author:** M.Aimal  
 **License:** GPL v2 or later
 
@@ -26,17 +26,21 @@ A beautiful and feature-rich appointment scheduling system for WordPress with ca
 ## ✨ Features
 
 ### Core Features
+
 - **📅 Interactive Calendar**: Beautiful, responsive calendar interface for date selection
 - **⏰ Time Slot Management**: Configurable working hours and time intervals
-- **📧 Email Notifications**: Automatic email confirmations to admin and customers
+- **📧 Email Notifications**: Automatic email confirmations to admin, customers, and guests
 - **🌍 Timezone Support**: Select timezone for accurate scheduling
 - **📱 Fully Responsive**: Works perfectly on desktop, tablet, and mobile devices
 - **🎨 Modern UI**: Clean, blue-themed design with smooth animations
 
 ### Advanced Features
-- **🔗 Google Meet Integration**: Automatic Google Meet link generation for appointments
+
+- **� Guest Support**: Add colleagues/guests to appointments via email
+- **❌ Cancellation System**: Unique cancellation links for users to easily cancel appointments
+- **�🔗 Google Meet Integration**: Automatic Google Meet link generation for appointments
 - **📅 Google Calendar Sync**: Automatic event creation in Google Calendar with Meet links
-- **👥 Multiple Admin Emails**: Send notifications to multiple email addresses
+- **� Smart Notifications**: Alerts for admin and guests on new bookings and cancellations
 - **🔔 Email Reminders**: Automated reminders (1 day, 1 hour, 15 minutes before)
 - **🚫 Duplicate Prevention**: Prevents double-booking of same time slots
 - **📊 Admin Dashboard**: View and manage all appointments
@@ -68,7 +72,8 @@ A beautiful and feature-rich appointment scheduling system for WordPress with ca
 
 1. **Activate the Plugin**: Go to Plugins and activate "Appointment Scheduler"
 
-2. **Configure Settings**: 
+2. **Configure Settings**:
+
    - Navigate to **Appointments → Settings**
    - Set your working hours (Start Time, End Time)
    - Set time interval (e.g., 30 minutes)
@@ -77,6 +82,7 @@ A beautiful and feature-rich appointment scheduling system for WordPress with ca
    - Save settings
 
 3. **Add to Page/Post**:
+
    - Use shortcode: `[appointment_scheduler]`
    - Or use the block editor to add the shortcode block
 
@@ -93,18 +99,22 @@ A beautiful and feature-rich appointment scheduling system for WordPress with ca
 Navigate to **Appointments → Settings** to configure:
 
 ### Working Hours
+
 - **Start Time**: When appointments can start (e.g., 10:00)
 - **End Time**: When appointments end (e.g., 17:30)
 - **Time Interval**: Minutes between slots (e.g., 30 minutes)
 
 ### Email Settings
+
 - **Admin Email**: Primary email to receive appointment notifications
 - **Additional Emails**: Multiple emails separated by commas (e.g., `email1@example.com, email2@example.com`)
 
 ### Timezone
+
 - Select your timezone from the dropdown (e.g., Europe/London, America/New_York)
 
 ### Email Reminders
+
 - **Enable Reminders**: Toggle to enable/disable automatic reminders
 - **Reminder Times**: Select when to send reminders:
   - 1 day before
@@ -112,6 +122,7 @@ Navigate to **Appointments → Settings** to configure:
   - 15 minutes before
 
 ### Google Calendar API (Optional)
+
 - **Enable Google Calendar API**: Toggle to enable automatic calendar event creation
 - **Client ID**: Google OAuth Client ID
 - **Client Secret**: Google OAuth Client Secret
@@ -149,6 +160,7 @@ Navigate to **Appointments → Settings** to configure:
 1. Go to **APIs & Services → Credentials**
 2. Click **Create Credentials → OAuth 2.0 Client ID**
 3. If prompted, configure OAuth consent screen:
+
    - User Type: **External** (or Internal for Workspace)
    - App name: Your app name
    - User support email: Your email
@@ -160,6 +172,7 @@ Navigate to **Appointments → Settings** to configure:
    - Click **Save and Continue**
 
 4. Create OAuth Client ID:
+
    - Application type: **Web application**
    - Name: Appointment Scheduler
    - **Authorized redirect URIs**: Add this URL:
@@ -192,16 +205,19 @@ Navigate to **Appointments → Settings** to configure:
 ### Troubleshooting
 
 **Issue: "Error exchanging code"**
+
 - Check that redirect URI matches exactly in Google Console
 - Ensure Client ID and Secret are correct
 - Check that Calendar API is enabled
 
 **Issue: "Access denied"**
+
 - Make sure you're logged in with the correct Google account
 - Check OAuth consent screen is configured
 - Verify scopes include calendar.events
 
 **Issue: Events not creating**
+
 - Check OAuth status shows "Connected"
 - Verify Google Calendar API is enabled in Cloud Console
 - Check WordPress error logs for API errors
@@ -213,7 +229,7 @@ Navigate to **Appointments → Settings** to configure:
 ### For Site Administrators
 
 1. **View Appointments**: Go to **Appointments** in WordPress admin
-2. **Manage Appointments**: 
+2. **Manage Appointments**:
    - View all bookings with customer details
    - Edit Google Meet links
    - Add events to Google Calendar
@@ -224,17 +240,18 @@ Navigate to **Appointments → Settings** to configure:
 
 1. Visit the page with `[appointment_scheduler]` shortcode
 2. Select an available date from the calendar
-3. Choose a time slot from available times
+3. Choose a time slot from available times (duration is automatically calculated)
 4. Fill in the booking form:
    - Name (required)
    - Email (required)
    - Phone (optional)
+   - Guests (optional)
    - Message (optional)
 5. Click **Book Appointment**
 6. Receive confirmation email with:
    - Appointment details
    - Google Meet link
-   - Google Calendar link (if Google account)
+   - Cancellation link
 
 ---
 
@@ -262,19 +279,19 @@ Navigate to **Appointments → Settings** to configure:
 
 ![Appointment Scheduler Interface](./screenshots/appointment-scheduler-main.png)
 
-*The main appointment scheduling interface showing the calendar on the left and available time slots on the right.*
+_The main appointment scheduling interface showing the calendar on the left and available time slots on the right._
 
 ### Admin Settings Page
 
 ![Admin Settings](./screenshots/appointment-scheduler-settings.png)
 
-*Admin settings page where you can configure working hours, time intervals, timezone, email notifications, and Google Calendar API.*
+_Admin settings page where you can configure working hours, time intervals, timezone, email notifications, and Google Calendar API._
 
 ### Admin Bookings Dashboard
 
 ![Admin Bookings](./screenshots/appointment-scheduler-bookings.png)
 
-*Admin dashboard showing all booked appointments with customer details, Meet links, and management options.*
+_Admin dashboard showing all booked appointments with customer details, Meet links, and management options._
 
 **Note:** Screenshot images should be placed in the `screenshots` folder. See `screenshots/README.md` for instructions on taking and adding screenshots.
 
@@ -282,9 +299,29 @@ Navigate to **Appointments → Settings** to configure:
 
 ## 🔄 Changelog
 
-### Version 1.1.0 (Current)
+### Version 1.3.0 (Current)
 
 **New Features:**
+
+- ✅ **Guest Support**: Users can now add guest emails to invites
+- ✅ **Cancellation System**: Users receive a cancellation link to cancel appointments
+- ✅ **Smart Slot Status**: Differentiates between 'Booked' slots and 'Time Passed' slots
+- ✅ **Dynamic Time Display**: Modal now shows "Start Time - End Time" based on duration interval
+- ✅ **Modal Scroll Fix**: Fixed scrolling issue on booking modal for better UX
+- ✅ **Email Improvements**: Fixed "Unknown Sender" issue and improved email templates
+
+### Version 1.2.0
+
+**New Features:**
+
+- ✅ **Multiple Admin Emails**: Support for multiple notification recipients
+- ✅ **Google Calendar Sync**: Attendees (guests) are now added to Google Calendar events
+- ✅ **Improved Validation**: Better email and form validation logic
+
+### Version 1.1.0
+
+**New Features:**
+
 - ✅ Google Calendar API integration with automatic event creation
 - ✅ Automatic Google Meet link generation and addition to calendar events
 - ✅ OAuth 2.0 authentication for Google Calendar
@@ -300,12 +337,14 @@ Navigate to **Appointments → Settings** to configure:
 - ✅ Enhanced spacing and border styling with !important flags
 
 **Improvements:**
+
 - Better error handling for Google Calendar API
 - Improved email templates with Meet links
 - Enhanced admin dashboard UI
 - Better mobile responsiveness
 
 **Bug Fixes:**
+
 - Fixed CSS caching issue
 - Fixed Meet link inconsistency between admin and user emails
 - Fixed timezone display format
@@ -332,6 +371,7 @@ Navigate to **Appointments → Settings** to configure:
 ### Database
 
 The plugin creates a custom table: `wp_appointment_bookings` with the following structure:
+
 - `id` - Primary key
 - `name` - Customer name
 - `email` - Customer email
@@ -348,9 +388,11 @@ The plugin creates a custom table: `wp_appointment_bookings` with the following 
 ### Hooks & Filters
 
 **Actions:**
+
 - `appointment_scheduler_send_reminders` - Cron hook for sending reminders
 
 **AJAX Actions:**
+
 - `submit_appointment` - Submit new appointment
 - `get_time_slots` - Get available time slots for a date
 - `delete_appointment` - Delete an appointment (admin only)

@@ -19,6 +19,7 @@ if (!current_user_can('manage_options')) {
                     <th>Name</th>
                     <th>Email</th>
                     <th>Phone</th>
+                    <th>Guests</th>
                     <th>Date</th>
                     <th>Time</th>
                     <th>Meet Link</th>
@@ -34,6 +35,18 @@ if (!current_user_can('manage_options')) {
                         <td><?php echo esc_html($booking->name); ?></td>
                         <td><?php echo esc_html($booking->email); ?></td>
                         <td><?php echo esc_html($booking->phone ? $booking->phone : '-'); ?></td>
+                        <td>
+                            <?php 
+                            if (!empty($booking->guest_emails)) {
+                                $guests = explode(',', $booking->guest_emails);
+                                foreach($guests as $guest) {
+                                    echo esc_html(trim($guest)) . '<br>';
+                                }
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </td>
                         <td><?php echo esc_html(date('F j, Y', strtotime($booking->appointment_date))); ?></td>
                         <td><?php echo esc_html(date('g:i A', strtotime($booking->appointment_time))); ?></td>
                         <td>

@@ -50,6 +50,12 @@ $reminder_times = get_option('appointment_reminder_times', array('15min', '1hr',
 if (!is_array($reminder_times)) {
     $reminder_times = array();
 }
+
+// Google Calendar Settings
+$google_client_id = get_option('google_calendar_client_id', '');
+$google_client_secret = get_option('google_calendar_client_secret', '');
+$google_calendar_enabled = get_option('google_calendar_enabled', 'no');
+$google_access_token = get_option('google_calendar_access_token', '');
 ?>
 
 <div class="wrap">
@@ -193,9 +199,8 @@ if (!is_array($reminder_times)) {
         </table>
         
         <p class="submit">
-            <input type="submit" name="submit" id="submit" class="button button-primary" value="Save Changes">
+            <input type="submit" name="submit" id="submit_general" class="button button-primary" value="Save Changes">
         </p>
-    </form>
     
     <hr>
     
@@ -211,9 +216,6 @@ if (!is_array($reminder_times)) {
     }
     ?>
     
-    <form method="post" action="">
-        <?php wp_nonce_field('appointment_scheduler_settings'); ?>
-        
         <table class="form-table">
             <tr>
                 <th scope="row">
@@ -261,7 +263,7 @@ if (!is_array($reminder_times)) {
         </table>
         
         <p class="submit">
-            <input type="submit" name="submit" id="submit" class="button button-primary" value="Save Google Calendar Settings">
+            <input type="submit" name="submit" id="submit_google" class="button button-primary" value="Save All Settings">
         </p>
     </form>
     

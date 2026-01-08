@@ -242,19 +242,24 @@
                 loadTimeSlotsForDate(dateStr, function(slots, isDateBooked) {
                     const daySlotsHTML = [];
                     
-                    if (isDateBooked) {
-                        daySlotsHTML.push('<div class="time-slot-placeholder"><span class="booked-message">Appointment Booked</span></div>');
-                    } else if (slots.length === 0) {
+                    // Logic Update: Don't hide all slots just because isDateBooked is true.
+                    // Instead, rely on the slots array. If slots are empty, then show placebo.
+                    if (slots.length === 0) {
                         daySlotsHTML.push('<div class="time-slot-placeholder"></div>');
                     } else {
                         slots.forEach(function(slot) {
-                            if (slot.available) {
+                            if (slot.status === 'available' || slot.available === true) {
                                 daySlotsHTML.push(
                                     `<button type="button" class="time-slot" data-date="${dateStr}" data-time="${slot.value}">${slot.time}</button>`
                                 );
-                            } else {
+                            } else if (slot.status === 'past') {
                                 daySlotsHTML.push(
-                                    `<div class="time-slot unavailable" title="Already Booked">${slot.time} <span class="booked-text">(Booked)</span></div>`
+                                    `<div class="time-slot past" title="Time Passed">${slot.time}</div>`
+                                );
+                            } else {
+                                // Default to booked
+                                daySlotsHTML.push(
+                                    `<div class="time-slot unavailable" title="Already Booked">${slot.time} <span class="booked-text">Booked</span></div>`
                                 );
                             }
                         });
@@ -308,11 +313,27 @@
     
     function openBookingModal(date, time) {
         const dateFormatted = formatDateDisplay(date);
-        const timeFormatted = formatTimeDisplay(time);
+        const timeFormattedStart = formatTimeDisplay(time);
+        
+        // Calculate End Time
+        const [hours, minutes] = time.split(':').map(Number);
+        const dateObj = new Date();
+        dateObj.setHours(hours, minutes, 0, 0);
+        // Add interval
+        const interval = parseInt(appointmentScheduler.interval) || 30;
+        dateObj.setMinutes(dateObj.getMinutes() + interval);
+        
+        const endHours = dateObj.getHours();
+        const endMinutes = dateObj.getMinutes();
+        // Format end time manually to match formatTimeDisplay logic
+        const endAmpm = endHours >= 12 ? 'pm' : 'am';
+        const endDisplayHour = endHours % 12 || 12;
+        const endDisplayMinutes = endMinutes < 10 ? '0' + endMinutes : endMinutes;
+        const timeFormattedEnd = endDisplayHour + ':' + endDisplayMinutes + endAmpm;
         
         $('#selectedDate').val(date);
         $('#selectedTime').val(time);
-        $('#selectedAppointmentDisplay').text(dateFormatted + ' at ' + timeFormatted);
+        $('#selectedAppointmentDisplay').text(dateFormatted + ' at ' + timeFormattedStart + ' - ' + timeFormattedEnd);
         
         $('#appointmentModal').addClass('show');
         $('body').css('overflow', 'hidden');
@@ -334,6 +355,7 @@
             phone: $('#appointmentPhone').val(),
             date: $('#selectedDate').val(),
             time: $('#selectedTime').val(),
+            guest_emails: $('#appointmentGuests').val(),
             message: $('#appointmentMessage').val()
         };
         
