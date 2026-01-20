@@ -30,6 +30,7 @@ if (isset($_POST['submit'])) {
     }
     update_option('appointment_additional_email', $additional_emails);
     update_option('appointment_timezone', sanitize_text_field($_POST['appointment_timezone']));
+    update_option('appointment_thankyou_page', esc_url_raw($_POST['appointment_thankyou_page']));
     update_option('appointment_reminder_enabled', isset($_POST['appointment_reminder_enabled']) ? 'yes' : 'no');
     update_option('appointment_reminder_times', isset($_POST['appointment_reminder_times']) ? $_POST['appointment_reminder_times'] : array());
     update_option('google_calendar_client_id', sanitize_text_field($_POST['google_calendar_client_id']));
@@ -154,6 +155,18 @@ $google_access_token = get_option('google_calendar_access_token', '');
                         ?>
                     </select>
                     <p class="description">Select the timezone for displaying appointment times.</p>
+                </td>
+            </tr>
+            
+            <tr>
+                <th scope="row">
+                    <label for="appointment_thankyou_page">Thank You Page URL (Optional)</label>
+                </th>
+                <td>
+                    <input type="text" id="appointment_thankyou_page" name="appointment_thankyou_page" 
+                           value="<?php echo esc_attr(get_option('appointment_thankyou_page', '')); ?>" class="regular-text" 
+                           placeholder="https://yoursite.com/thank-you or http://localhost/thank-you">
+                    <p class="description">URL to redirect users after successful appointment booking. Leave empty to show a simple confirmation message. <strong>For local development, use your local URL (e.g., http://boltosai.local/thank-you/)</strong></p>
                 </td>
             </tr>
             
@@ -287,7 +300,20 @@ $google_access_token = get_option('google_calendar_access_token', '');
     <p>To display the appointment scheduler on any page or post, use the following shortcode:</p>
     <code>[appointment_scheduler]</code>
     
-    <p>You can also specify a custom email address:</p>
+    <p style="margin-top: 15px;">You can also specify a custom email address:</p>
     <code>[appointment_scheduler email="custom@example.com"]</code>
+    
+    <h3 style="margin-top: 30px;">Thank You Page</h3>
+    <p>To display the thank you page, create a new page and use this shortcode:</p>
+    <code>[appointment_thankyou]</code>
+    
+    <p style="margin-top: 15px;">After creating the thank you page, copy its URL and paste it in the "Thank You Page URL" setting above. You can customize the thank you message by:</p>
+    <ol>
+        <li>Going to <strong>Appointments → Thank You Messages</strong> in the WordPress admin menu</li>
+        <li>Click <strong>Add New Message</strong></li>
+        <li>Enter your custom title and message</li>
+        <li>Click <strong>Publish</strong></li>
+    </ol>
+    <p>The latest published thank you message will be displayed on your thank you page.</p>
 </div>
 

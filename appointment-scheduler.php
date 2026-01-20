@@ -50,11 +50,17 @@ class Appointment_Scheduler {
         add_action('wp', array($this, 'schedule_reminder_cron'));
         add_action('admin_init', array($this, 'handle_google_oauth_callback'));
         add_action('wp_ajax_google_calendar_auth', array($this, 'initiate_google_oauth'));
+        add_action('add_meta_boxes', array($this, 'add_thankyou_meta_boxes'));
+        add_action('save_post', array($this, 'save_thankyou_meta_boxes'));
     }
     
     public function init() {
-        // Register shortcode
+        // Register shortcodes
         add_shortcode('appointment_scheduler', array($this, 'render_scheduler'));
+        add_shortcode('appointment_thankyou', array($this, 'render_thankyou_page'));
+        
+        // Register custom post type for thank you messages
+        $this->register_thankyou_post_type();
         
         // Handle cancellation
         if (isset($_GET['appointment_action']) && $_GET['appointment_action'] === 'cancel') {
@@ -177,7 +183,8 @@ class Appointment_Scheduler {
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('appointment_scheduler_nonce'),
             'timezone' => $this->get_timezone_string(),
-            'interval' => get_option('appointment_interval', 30)
+            'interval' => get_option('appointment_interval', 30),
+            'thankyou_url' => get_option('appointment_thankyou_page', '')
         ));
     }
     
@@ -206,6 +213,238 @@ class Appointment_Scheduler {
         include APPOINTMENT_SCHEDULER_PLUGIN_DIR . 'templates/scheduler.php';
         return ob_get_clean();
     }
+    
+    public function register_thankyou_post_type() {
+        $labels = array(
+            'name'               => __('Thank You Messages', 'appointment-scheduler'),
+            'singular_name'      => __('Thank You Message', 'appointment-scheduler'),
+            'menu_name'          => __('Thank You Messages', 'appointment-scheduler'),
+            'add_new'            => __('Add New Message', 'appointment-scheduler'),
+            'add_new_item'       => __('Add New Thank You Message', 'appointment-scheduler'),
+            'edit_item'          => __('Edit Thank You Message', 'appointment-scheduler'),
+            'new_item'           => __('New Thank You Message', 'appointment-scheduler'),
+            'view_item'          => __('View Thank You Message', 'appointment-scheduler'),
+            'search_items'       => __('Search Thank You Messages', 'appointment-scheduler'),
+            'not_found'          => __('No thank you messages found', 'appointment-scheduler'),
+            'not_found_in_trash' => __('No thank you messages found in trash', 'appointment-scheduler'),
+        );
+        
+        $args = array(
+            'labels'              => $labels,
+            'public'              => false,
+            'show_ui'             => true,
+            'show_in_menu'        => 'appointment-scheduler',
+            'capability_type'     => 'post',
+            'hierarchical'        => false,
+            'supports'            => array('title', 'editor'),
+            'has_archive'         => false,
+            'menu_icon'           => 'dashicons-thumbs-up',
+        );
+        
+        register_post_type('appointment_thankyou', $args);
+    }
+    
+    public function render_thankyou_page($atts) {
+        $atts = shortcode_atts(array(
+            'message_id' => '',
+        ), $atts);
+        
+        ob_start();
+        include APPOINTMENT_SCHEDULER_PLUGIN_DIR . 'templates/thankyou-bolt.php';
+        return ob_get_clean();
+    }
+
+    /**
+     * Add meta boxes for Thank You Messages
+     */
+    public function add_thankyou_meta_boxes() {
+        add_meta_box(
+            'thankyou_bolt_fields',
+            'Bolt+ Style Template Fields',
+            array($this, 'render_thankyou_meta_box'),
+            'appointment_thankyou',
+            'normal',
+            'high'
+        );
+    }
+
+    /**
+     * Render the meta box for Thank You Messages
+     */
+    public function render_thankyou_meta_box($post) {
+        wp_nonce_field('save_thankyou_meta_boxes', 'thankyou_meta_nonce');
+
+        $logo_url = get_post_meta($post->ID, '_thankyou_logo_url', true);
+        $main_heading = get_post_meta($post->ID, '_thankyou_main_heading', true);
+        $desc_intro = get_post_meta($post->ID, '_thankyou_desc_intro', true);
+        $desc_para1 = get_post_meta($post->ID, '_thankyou_desc_para1', true);
+        $desc_para2 = get_post_meta($post->ID, '_thankyou_desc_para2', true);
+        $desc_para3 = get_post_meta($post->ID, '_thankyou_desc_para3', true);
+        $stat1_number = get_post_meta($post->ID, '_thankyou_stat1_number', true);
+        $stat1_label = get_post_meta($post->ID, '_thankyou_stat1_label', true);
+        $stat2_number = get_post_meta($post->ID, '_thankyou_stat2_number', true);
+        $stat2_label = get_post_meta($post->ID, '_thankyou_stat2_label', true);
+        $stat3_number = get_post_meta($post->ID, '_thankyou_stat3_number', true);
+        $stat3_label = get_post_meta($post->ID, '_thankyou_stat3_label', true);
+        $button1_text = get_post_meta($post->ID, '_thankyou_button1_text', true);
+        $button1_url = get_post_meta($post->ID, '_thankyou_button1_url', true);
+        $button2_text = get_post_meta($post->ID, '_thankyou_button2_text', true);
+        $button2_url = get_post_meta($post->ID, '_thankyou_button2_url', true);
+        
+        // Handle images array
+        $carousel_images = get_post_meta($post->ID, '_thankyou_carousel_images', true);
+        $carousel_images_str = is_array($carousel_images) ? implode("\n", $carousel_images) : '';
+
+        ?>
+        <div class="thankyou-meta-wrapper" style="padding: 10px;">
+            <p><strong>Branding</strong></p>
+            <p>
+                <label for="thankyou_logo_url">Logo URL:</label><br>
+                <input type="text" id="thankyou_logo_url" name="thankyou_logo_url" value="<?php echo esc_attr($logo_url); ?>" class="widefat">
+            </p>
+            <p>
+                <label for="thankyou_main_heading">Main Heading:</label><br>
+                <input type="text" id="thankyou_main_heading" name="thankyou_main_heading" value="<?php echo esc_attr($main_heading); ?>" class="widefat">
+            </p>
+
+            <hr>
+            <p><strong>Description Paragraphs</strong></p>
+            <p>
+                <label for="thankyou_desc_intro">Intro (Bold):</label><br>
+                <input type="text" id="thankyou_desc_intro" name="thankyou_desc_intro" value="<?php echo esc_attr($desc_intro); ?>" class="widefat">
+            </p>
+            <p>
+                <label for="thankyou_desc_para1">Paragraph 1:</label><br>
+                <textarea id="thankyou_desc_para1" name="thankyou_desc_para1" class="widefat" rows="2"><?php echo esc_textarea($desc_para1); ?></textarea>
+            </p>
+            <p>
+                <label for="thankyou_desc_para2">Paragraph 2:</label><br>
+                <textarea id="thankyou_desc_para2" name="thankyou_desc_para2" class="widefat" rows="2"><?php echo esc_textarea($desc_para2); ?></textarea>
+            </p>
+            <p>
+                <label for="thankyou_desc_para3">Paragraph 3:</label><br>
+                <textarea id="thankyou_desc_para3" name="thankyou_desc_para3" class="widefat" rows="2"><?php echo esc_textarea($desc_para3); ?></textarea>
+            </p>
+
+            <hr>
+            <p><strong>Statistics</strong></p>
+            <table class="widefat" style="border: none;">
+                <tr>
+                    <td>
+                        <label>Stat 1 Number:</label><br>
+                        <input type="text" name="thankyou_stat1_number" value="<?php echo esc_attr($stat1_number); ?>">
+                    </td>
+                    <td>
+                        <label>Stat 1 Label:</label><br>
+                        <input type="text" name="thankyou_stat1_label" value="<?php echo esc_attr($stat1_label); ?>">
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <label>Stat 2 Number:</label><br>
+                        <input type="text" name="thankyou_stat2_number" value="<?php echo esc_attr($stat2_number); ?>">
+                    </td>
+                    <td>
+                        <label>Stat 2 Label:</label><br>
+                        <input type="text" name="thankyou_stat2_label" value="<?php echo esc_attr($stat2_label); ?>">
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <label>Stat 3 Number:</label><br>
+                        <input type="text" name="thankyou_stat3_number" value="<?php echo esc_attr($stat3_number); ?>">
+                    </td>
+                    <td>
+                        <label>Stat 3 Label:</label><br>
+                        <input type="text" name="thankyou_stat3_label" value="<?php echo esc_attr($stat3_label); ?>">
+                    </td>
+                </tr>
+            </table>
+
+            <hr>
+            <p><strong>Carousel Images</strong></p>
+            <p>
+                <label for="thankyou_carousel_images">Image URLs (one per line):</label><br>
+                <textarea id="thankyou_carousel_images" name="thankyou_carousel_images" class="widefat" rows="4"><?php echo esc_textarea($carousel_images_str); ?></textarea>
+            </p>
+
+            <hr>
+            <p><strong>Buttons</strong></p>
+            <table class="widefat" style="border: none;">
+                <tr>
+                    <td>
+                        <label>Button 1 (Primary) Text:</label><br>
+                        <input type="text" name="thankyou_button1_text" value="<?php echo esc_attr($button1_text); ?>">
+                    </td>
+                    <td>
+                        <label>Button 1 URL:</label><br>
+                        <input type="text" name="thankyou_button1_url" value="<?php echo esc_attr($button1_url); ?>">
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <label>Button 2 (Secondary) Text:</label><br>
+                        <input type="text" name="thankyou_button2_text" value="<?php echo esc_attr($button2_text); ?>">
+                    </td>
+                    <td>
+                        <label>Button 2 URL:</label><br>
+                        <input type="text" name="thankyou_button2_url" value="<?php echo esc_attr($button2_url); ?>">
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <?php
+    }
+
+    /**
+     * Save the meta box values
+     */
+    public function save_thankyou_meta_boxes($post_id) {
+        if (!isset($_POST['thankyou_meta_nonce']) || !wp_verify_nonce($_POST['thankyou_meta_nonce'], 'save_thankyou_meta_boxes')) {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        $fields = array(
+            'thankyou_logo_url' => '_thankyou_logo_url',
+            'thankyou_main_heading' => '_thankyou_main_heading',
+            'thankyou_desc_intro' => '_thankyou_desc_intro',
+            'thankyou_desc_para1' => '_thankyou_desc_para1',
+            'thankyou_desc_para2' => '_thankyou_desc_para2',
+            'thankyou_desc_para3' => '_thankyou_desc_para3',
+            'thankyou_stat1_number' => '_thankyou_stat1_number',
+            'thankyou_stat1_label' => '_thankyou_stat1_label',
+            'thankyou_stat2_number' => '_thankyou_stat2_number',
+            'thankyou_stat2_label' => '_thankyou_stat2_label',
+            'thankyou_stat3_number' => '_thankyou_stat3_number',
+            'thankyou_stat3_label' => '_thankyou_stat3_label',
+            'thankyou_button1_text' => '_thankyou_button1_text',
+            'thankyou_button1_url' => '_thankyou_button1_url',
+            'thankyou_button2_text' => '_thankyou_button2_text',
+            'thankyou_button2_url' => '_thankyou_button2_url'
+        );
+
+        foreach ($fields as $key => $meta_key) {
+            if (isset($_POST[$key])) {
+                update_post_meta($post_id, $meta_key, sanitize_text_field($_POST[$key]));
+            }
+        }
+
+        // Handle carousel images array
+        if (isset($_POST['thankyou_carousel_images'])) {
+            $images_raw = sanitize_textarea_field($_POST['thankyou_carousel_images']);
+            $images_array = array_filter(array_map('trim', explode("\n", $images_raw)));
+            update_post_meta($post_id, '_thankyou_carousel_images', $images_array);
+        }
+    }
+
     
     public function get_time_slots() {
         check_ajax_referer('appointment_scheduler_nonce', 'nonce');
@@ -598,6 +837,16 @@ class Appointment_Scheduler {
             30
         );
         
+        // Add "All Appointments" as first submenu item
+        add_submenu_page(
+            'appointment-scheduler',
+            'All Appointments',
+            'All Appointments',
+            'manage_options',
+            'appointment-scheduler',
+            array($this, 'render_admin_page')
+        );
+        
         add_submenu_page(
             'appointment-scheduler',
             'Settings',
@@ -623,6 +872,7 @@ class Appointment_Scheduler {
         register_setting('appointment_scheduler_settings', 'google_calendar_access_token');
         register_setting('appointment_scheduler_settings', 'google_calendar_refresh_token');
         register_setting('appointment_scheduler_settings', 'google_calendar_enabled');
+        register_setting('appointment_scheduler_settings', 'appointment_thankyou_page');
     }
     
     public function schedule_reminder_cron() {
@@ -1154,6 +1404,17 @@ class Appointment_Scheduler {
             foreach ($guest_emails as $guest_email) {
                 if (is_email($guest_email)) {
                     $event_data['attendees'][] = array('email' => $guest_email);
+                }
+            }
+        }
+        
+        // Add additional emails from settings to attendees
+        $additional_emails = get_option('appointment_additional_email', '');
+        if (!empty($additional_emails)) {
+            $additional_email_array = array_map('trim', explode(',', $additional_emails));
+            foreach ($additional_email_array as $additional_email) {
+                if (is_email($additional_email)) {
+                    $event_data['attendees'][] = array('email' => $additional_email);
                 }
             }
         }

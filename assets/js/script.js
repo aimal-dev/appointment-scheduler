@@ -372,28 +372,48 @@
                     messageEl.removeClass('error').addClass('success')
                         .text(response.data.message).show();
                     
-                    // Check if Google account and auto-add to calendar
-                    if (response.data.is_google_account && response.data.calendar_link) {
-                        // Auto-open Google Calendar for Google accounts
-                        setTimeout(function() {
-                            window.open(response.data.calendar_link, '_blank');
-                            messageEl.append('<br><small>Opening Google Calendar to add event...</small>');
-                        }, 500);
-                    } else if (response.data.calendar_link) {
-                        // Show option to add to calendar for non-Google accounts
-                        const calendarBtn = $('<button type="button" class="button" style="margin-top: 10px;">Add to Google Calendar</button>');
-                        calendarBtn.on('click', function() {
-                            window.open(response.data.calendar_link, '_blank');
+                    // Check if thank you page URL is configured
+                    if (appointmentScheduler.thankyou_url && appointmentScheduler.thankyou_url !== '') {
+                        // Build URL with appointment details
+                        const params = new URLSearchParams({
+                            name: $('#appointmentName').val(),
+                            email: $('#appointmentEmail').val(),
+                            date: $('#selectedDate').val(),
+                            time: $('#selectedTime').val()
                         });
-                        messageEl.append('<br>').append(calendarBtn);
+                        
+                        const separator = appointmentScheduler.thankyou_url.includes('?') ? '&' : '?';
+                        const redirectUrl = appointmentScheduler.thankyou_url + separator + params.toString();
+                        
+                        // Redirect to thank you page after short delay
+                        setTimeout(function() {
+                            window.location.href = redirectUrl;
+                        }, 1500);
+                    } else {
+                        // Original behavior: calendar links and close modal
+                        // Check if Google account and auto-add to calendar
+                        if (response.data.is_google_account && response.data.calendar_link) {
+                            // Auto-open Google Calendar for Google accounts
+                            setTimeout(function() {
+                                window.open(response.data.calendar_link, '_blank');
+                                messageEl.append('<br><small>Opening Google Calendar to add event...</small>');
+                            }, 500);
+                        } else if (response.data.calendar_link) {
+                            // Show option to add to calendar for non-Google accounts
+                            const calendarBtn = $('<button type="button" class="button" style="margin-top: 10px;">Add to Google Calendar</button>');
+                            calendarBtn.on('click', function() {
+                                window.open(response.data.calendar_link, '_blank');
+                            });
+                            messageEl.append('<br>').append(calendarBtn);
+                        }
+                        
+                        setTimeout(function() {
+                            closeModal();
+                            // Reload booked dates and time slots to update availability
+                            loadBookedDates();
+                            loadTimeSlots();
+                        }, response.data.is_google_account ? 3000 : 2000);
                     }
-                    
-                    setTimeout(function() {
-                        closeModal();
-                        // Reload booked dates and time slots to update availability
-                        loadBookedDates();
-                        loadTimeSlots();
-                    }, response.data.is_google_account ? 3000 : 2000);
                 } else {
                     messageEl.removeClass('success').addClass('error')
                         .text(response.data.message || 'An error occurred. Please try again.').show();
