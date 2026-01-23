@@ -35,17 +35,39 @@
             renderCalendar();
         });
         
-        $('.prev-days').on('click', function() {
-            if (currentDayOffset > 0) {
-                currentDayOffset--;
-                loadTimeSlots();
-            }
+        $('#slots-prev').on('click', function() {
+            changeSelectedDateBy(-3);
         });
         
-        $('.next-days').on('click', function() {
-            currentDayOffset++;
-            loadTimeSlots();
+        $('#slots-next').on('click', function() {
+            changeSelectedDateBy(3);
         });
+
+        function changeSelectedDateBy(days) {
+            if (!selectedDate) {
+               // If no date selected, start from Today
+               const now = new Date();
+               selectedDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            }
+            
+            let d = new Date(selectedDate);
+            d.setDate(d.getDate() + days); // Shift days
+            
+            // Format YYYY-MM-DD
+            let year = d.getFullYear();
+            let month = String(d.getMonth() + 1).padStart(2, '0');
+            let day = String(d.getDate()).padStart(2, '0');
+            let newDateStr = `${year}-${month}-${day}`;
+            
+            // Update Calendar Month view if changed
+            if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) {
+                currentMonth = d.getMonth();
+                currentYear = d.getFullYear();
+                renderCalendar(); // Re-render grid for new month
+            }
+            
+            selectDate(newDateStr); // Highlight new date and load slots
+        }
         
         // Modal close
         $('.appointment-modal-close, .btn-cancel').on('click', function() {
@@ -163,13 +185,9 @@
                 classes += ' selected';
             }
             
-            const dayLabel = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
-            
             calendarHTML += `
                 <div class="${classes}" data-date="${dateStr}" title="${isBooked ? 'Appointment Booked' : ''}">
-                    <span class="day-label">${dayLabel}</span>
                     <span class="day-number">${day}</span>
-                    ${isBooked ? '<span class="booked-badge">Booked</span>' : ''}
                 </div>
             `;
         }
@@ -206,107 +224,104 @@
     
     function loadTimeSlots() {
         if (!selectedDate) {
-            // Use today as default
             selectedDate = formatDate(new Date());
         }
         
-        const [year, month, day] = selectedDate.split('-').map(Number);
-        const startDate = new Date(year, month - 1, day);
-        startDate.setDate(startDate.getDate() + currentDayOffset);
+        const grid = $('#time-slots-grid');
+        grid.html('<div class="slots-loading">Loading slots...</div>');
         
-        const daysHTML = [];
-        
-        // Create slots containers first
-        let slotsHTML = '';
-        for (let i = 0; i < daysToShow; i++) {
-            slotsHTML += '<div class="times-day-slots"></div>';
-        }
-        $('.times-slots-container').html(slotsHTML);
-        
-        // Load slots for each day
-        const promises = [];
-        
-        for (let i = 0; i < daysToShow; i++) {
-            const date = new Date(startDate);
-            date.setDate(startDate.getDate() + i);
-            const dateStr = formatDate(date);
-            
-            const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-            const dayName = dayNames[date.getDay()];
-            const dayNum = date.getDate();
-            
-            daysHTML.push(`<div class="times-day-header">${dayName} ${dayNum}</div>`);
-            
-            // Load time slots for this date
-            const promise = new Promise(function(resolve) {
-                loadTimeSlotsForDate(dateStr, function(slots, isDateBooked) {
-                    const daySlotsHTML = [];
-                    
-                    // Logic Update: Don't hide all slots just because isDateBooked is true.
-                    // Instead, rely on the slots array. If slots are empty, then show placebo.
-                    if (slots.length === 0) {
-                        daySlotsHTML.push('<div class="time-slot-placeholder"></div>');
-                    } else {
-                        slots.forEach(function(slot) {
-                            if (slot.status === 'available' || slot.available === true) {
-                                daySlotsHTML.push(
-                                    `<button type="button" class="time-slot" data-date="${dateStr}" data-time="${slot.value}">${slot.time}</button>`
-                                );
-                            } else if (slot.status === 'past') {
-                                daySlotsHTML.push(
-                                    `<div class="time-slot past" title="Time Passed">${slot.time}</div>`
-                                );
-                            } else {
-                                // Default to booked
-                                daySlotsHTML.push(
-                                    `<div class="time-slot unavailable" title="Already Booked">${slot.time} <span class="booked-text">Booked</span></div>`
-                                );
-                            }
-                        });
-                    }
-                    
-                    const container = $('.times-day-slots').eq(i);
-                    container.html(daySlotsHTML.join(''));
-                    
-                    // Add click handler
-                    container.find('.time-slot:not(.unavailable)').on('click', function() {
-                        const date = $(this).data('date');
-                        const time = $(this).data('time');
-                        openBookingModal(date, time);
-                    });
-                    
-                    resolve();
-                });
-            });
-            
-            promises.push(promise);
-        }
-        
-        $('.times-days-container').html(daysHTML.join(''));
-        
-        // Update navigation buttons
-        $('.prev-days').prop('disabled', currentDayOffset === 0);
-    }
-    
-    function loadTimeSlotsForDate(date, callback) {
         $.ajax({
             url: appointmentScheduler.ajax_url,
             type: 'POST',
             data: {
-                action: 'get_time_slots',
-                date: date,
-                selected_date: selectedDate,
+                action: 'get_multi_day_slots',
+                date: selectedDate,
+                days: 3,
                 nonce: appointmentScheduler.nonce
             },
             success: function(response) {
                 if (response.success) {
-                    callback(response.data.time_slots, response.data.is_date_booked || false);
+                    let html = '';
+                    const days = response.data;
+                    
+                    if (days && days.length > 0) {
+                        days.forEach(day => {
+                            let slotsHtml = '';
+                            
+                            if (day.slots.length > 0) {
+                                day.slots.forEach(slot => {
+                                    if (slot.status === 'past') return;
+                                    
+                                    if (slot.status === 'booked') {
+                                        // Calculate End Time for display
+                                        // slot.time is 'HH:mm'
+                                        const [h, m] = slot.time.split(':').map(Number);
+                                        const dateObj = new Date();
+                                        dateObj.setHours(h, m, 0, 0);
+                                        dateObj.setMinutes(dateObj.getMinutes() + (parseInt(appointmentScheduler.interval) || 30));
+                                        
+                                        // Format end time
+                                        const endH = dateObj.getHours();
+                                        const endM = dateObj.getMinutes();
+                                        const endAmpm = endH >= 12 ? 'pm' : 'am';
+                                        const endH12 = endH % 12 || 12;
+                                        const endMStr = endM < 10 ? '0' + endM : endM;
+                                        const endTimeDisplay = `${endH12}:${endMStr}${endAmpm}`;
+                                        
+                                        slotsHtml += `
+                                            <div class="time-slot booked" title="Already Booked">
+                                                <span class="slot-time">${slot.display} - ${endTimeDisplay}</span>
+                                                <span class="slot-status">Booked</span>
+                                            </div>
+                                        `;
+                                    } else {
+                                        slotsHtml += `
+                                            <div class="time-slot available" 
+                                                 data-time="${slot.time}" 
+                                                 data-date="${day.date}"
+                                                 data-display="${slot.display}">
+                                                ${slot.display}
+                                            </div>
+                                        `;
+                                    }
+                                });
+                            }
+                            
+                            if (slotsHtml === '') {
+                                slotsHtml = '<div class="no-slots">-</div>';
+                            }
+                            
+                            html += `
+                                <div class="day-column">
+                                    <div class="column-header">${day.label}</div>
+                                    <div class="column-slots">
+                                        ${slotsHtml}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        grid.html(html);
+                        
+                        // Bind click events
+                        $('.time-slot.available').off('click').on('click', function() {
+                            $('.time-slot').removeClass('selected');
+                            $(this).addClass('selected');
+                            
+                            const date = $(this).data('date');
+                            const time = $(this).data('time');
+                            
+                            openBookingModal(date, time);
+                        });
+                        
+                    } else {
+                        grid.html('<div class="slots-message">No availability found.</div>');
+                    }
                 } else {
-                    callback([], false);
+                    grid.html('<div class="slots-error">Error loading slots.</div>');
                 }
             },
             error: function() {
-                callback([], false);
+                grid.html('<div class="slots-error">Connection error.</div>');
             }
         });
     }
@@ -372,47 +387,31 @@
                     messageEl.removeClass('error').addClass('success')
                         .text(response.data.message).show();
                     
-                    // Check if thank you page URL is configured
+                    // Priority: Redirect to configured Thank You URL
                     if (appointmentScheduler.thankyou_url && appointmentScheduler.thankyou_url !== '') {
                         // Build URL with appointment details
+                        // Using prefixed keys to avoid conflict with WordPress reserved query vars (like 'name')
                         const params = new URLSearchParams({
-                            name: $('#appointmentName').val(),
-                            email: $('#appointmentEmail').val(),
-                            date: $('#selectedDate').val(),
-                            time: $('#selectedTime').val()
+                            booking_name: $('#appointmentName').val(),
+                            booking_email: $('#appointmentEmail').val(),
+                            booking_date: $('#selectedDate').val(),
+                            booking_time: $('#selectedTime').val()
                         });
                         
                         const separator = appointmentScheduler.thankyou_url.includes('?') ? '&' : '?';
                         const redirectUrl = appointmentScheduler.thankyou_url + separator + params.toString();
                         
-                        // Redirect to thank you page after short delay
+                        // Redirect after short delay
                         setTimeout(function() {
                             window.location.href = redirectUrl;
                         }, 1500);
                     } else {
-                        // Original behavior: calendar links and close modal
-                        // Check if Google account and auto-add to calendar
-                        if (response.data.is_google_account && response.data.calendar_link) {
-                            // Auto-open Google Calendar for Google accounts
-                            setTimeout(function() {
-                                window.open(response.data.calendar_link, '_blank');
-                                messageEl.append('<br><small>Opening Google Calendar to add event...</small>');
-                            }, 500);
-                        } else if (response.data.calendar_link) {
-                            // Show option to add to calendar for non-Google accounts
-                            const calendarBtn = $('<button type="button" class="button" style="margin-top: 10px;">Add to Google Calendar</button>');
-                            calendarBtn.on('click', function() {
-                                window.open(response.data.calendar_link, '_blank');
-                            });
-                            messageEl.append('<br>').append(calendarBtn);
-                        }
-                        
+                        // Fallback: Success message and close modal
                         setTimeout(function() {
                             closeModal();
-                            // Reload booked dates and time slots to update availability
                             loadBookedDates();
                             loadTimeSlots();
-                        }, response.data.is_google_account ? 3000 : 2000);
+                        }, 2000);
                     }
                 } else {
                     messageEl.removeClass('success').addClass('error')

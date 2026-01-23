@@ -50,17 +50,13 @@ class Appointment_Scheduler {
         add_action('wp', array($this, 'schedule_reminder_cron'));
         add_action('admin_init', array($this, 'handle_google_oauth_callback'));
         add_action('wp_ajax_google_calendar_auth', array($this, 'initiate_google_oauth'));
-        add_action('add_meta_boxes', array($this, 'add_thankyou_meta_boxes'));
-        add_action('save_post', array($this, 'save_thankyou_meta_boxes'));
+        add_action('wp_ajax_get_multi_day_slots', array($this, 'get_multi_day_slots'));
+        add_action('wp_ajax_nopriv_get_multi_day_slots', array($this, 'get_multi_day_slots'));
     }
     
     public function init() {
         // Register shortcodes
         add_shortcode('appointment_scheduler', array($this, 'render_scheduler'));
-        add_shortcode('appointment_thankyou', array($this, 'render_thankyou_page'));
-        
-        // Register custom post type for thank you messages
-        $this->register_thankyou_post_type();
         
         // Handle cancellation
         if (isset($_GET['appointment_action']) && $_GET['appointment_action'] === 'cancel') {
@@ -170,6 +166,14 @@ class Appointment_Scheduler {
             array(),
             APPOINTMENT_SCHEDULER_VERSION
         );
+
+        // Enqueue Bolt+ Thank You styles (since it's now part of the main scheduler view)
+        wp_enqueue_style(
+            'appointment-thankyou-bolt-style', 
+            APPOINTMENT_SCHEDULER_PLUGIN_URL . 'assets/css/thankyou-bolt.css', 
+            array(), 
+            APPOINTMENT_SCHEDULER_VERSION
+        );
         
         wp_enqueue_script(
             'appointment-scheduler-script',
@@ -184,7 +188,7 @@ class Appointment_Scheduler {
             'nonce' => wp_create_nonce('appointment_scheduler_nonce'),
             'timezone' => $this->get_timezone_string(),
             'interval' => get_option('appointment_interval', 30),
-            'thankyou_url' => get_option('appointment_thankyou_page', '')
+            'thankyou_url' => get_option('appointment_thankyou_url', '')
         ));
     }
     
@@ -209,240 +213,50 @@ class Appointment_Scheduler {
             'email' => get_option('admin_email'),
         ), $atts);
         
+        // Fetch values from settings instead of Custom Post Type meta
+        $sidebar_data = array(
+            'title' => get_option('appointment_sidebar_title', 'BoltOS Demo'),
+            'subtitle' => get_option('appointment_sidebar_subtitle', 'Turn viewers into revenue'),
+            'duration' => get_option('appointment_sidebar_duration', '30 min appointments'),
+            'location' => get_option('appointment_sidebar_location', 'Google Meet video conference info added after booking'),
+            'description' => get_option('appointment_sidebar_description', 'Our sales experts have helped thousands of companies growing revenue within weeks of implementation.')
+        );
+
+        // Prepare Timezone Label
+        $timezone_label = $this->get_timezone_string();
+
         ob_start();
         include APPOINTMENT_SCHEDULER_PLUGIN_DIR . 'templates/scheduler.php';
         return ob_get_clean();
     }
     
-    public function register_thankyou_post_type() {
-        $labels = array(
-            'name'               => __('Thank You Messages', 'appointment-scheduler'),
-            'singular_name'      => __('Thank You Message', 'appointment-scheduler'),
-            'menu_name'          => __('Thank You Messages', 'appointment-scheduler'),
-            'add_new'            => __('Add New Message', 'appointment-scheduler'),
-            'add_new_item'       => __('Add New Thank You Message', 'appointment-scheduler'),
-            'edit_item'          => __('Edit Thank You Message', 'appointment-scheduler'),
-            'new_item'           => __('New Thank You Message', 'appointment-scheduler'),
-            'view_item'          => __('View Thank You Message', 'appointment-scheduler'),
-            'search_items'       => __('Search Thank You Messages', 'appointment-scheduler'),
-            'not_found'          => __('No thank you messages found', 'appointment-scheduler'),
-            'not_found_in_trash' => __('No thank you messages found in trash', 'appointment-scheduler'),
-        );
+    public function register_settings() {
+        register_setting('appointment_scheduler_settings', 'appointment_start_time');
+        register_setting('appointment_scheduler_settings', 'appointment_end_time');
+        register_setting('appointment_scheduler_settings', 'appointment_interval');
+        register_setting('appointment_scheduler_settings', 'appointment_admin_email');
+        register_setting('appointment_scheduler_settings', 'appointment_additional_email');
+        register_setting('appointment_scheduler_settings', 'appointment_timezone');
+        register_setting('appointment_scheduler_settings', 'appointment_blocked_times');
+        register_setting('appointment_scheduler_settings', 'appointment_reminder_enabled');
+        register_setting('appointment_scheduler_settings', 'appointment_reminder_times');
         
-        $args = array(
-            'labels'              => $labels,
-            'public'              => false,
-            'show_ui'             => true,
-            'show_in_menu'        => 'appointment-scheduler',
-            'capability_type'     => 'post',
-            'hierarchical'        => false,
-            'supports'            => array('title', 'editor'),
-            'has_archive'         => false,
-            'menu_icon'           => 'dashicons-thumbs-up',
-        );
+        // Google Calendar Settings
+        register_setting('appointment_scheduler_settings', 'google_calendar_client_id');
+        register_setting('appointment_scheduler_settings', 'google_calendar_client_secret');
+        register_setting('appointment_scheduler_settings', 'google_calendar_access_token');
+        register_setting('appointment_scheduler_settings', 'google_calendar_refresh_token');
+        register_setting('appointment_scheduler_settings', 'google_calendar_enabled');
         
-        register_post_type('appointment_thankyou', $args);
-    }
-    
-    public function render_thankyou_page($atts) {
-        $atts = shortcode_atts(array(
-            'message_id' => '',
-        ), $atts);
+        // Sidebar Content Settings
+        register_setting('appointment_scheduler_settings', 'appointment_sidebar_title');
+        register_setting('appointment_scheduler_settings', 'appointment_sidebar_subtitle');
+        register_setting('appointment_scheduler_settings', 'appointment_sidebar_duration');
+        register_setting('appointment_scheduler_settings', 'appointment_sidebar_location');
+        register_setting('appointment_scheduler_settings', 'appointment_sidebar_description');
         
-        ob_start();
-        include APPOINTMENT_SCHEDULER_PLUGIN_DIR . 'templates/thankyou-bolt.php';
-        return ob_get_clean();
-    }
-
-    /**
-     * Add meta boxes for Thank You Messages
-     */
-    public function add_thankyou_meta_boxes() {
-        add_meta_box(
-            'thankyou_bolt_fields',
-            'Bolt+ Style Template Fields',
-            array($this, 'render_thankyou_meta_box'),
-            'appointment_thankyou',
-            'normal',
-            'high'
-        );
-    }
-
-    /**
-     * Render the meta box for Thank You Messages
-     */
-    public function render_thankyou_meta_box($post) {
-        wp_nonce_field('save_thankyou_meta_boxes', 'thankyou_meta_nonce');
-
-        $logo_url = get_post_meta($post->ID, '_thankyou_logo_url', true);
-        $main_heading = get_post_meta($post->ID, '_thankyou_main_heading', true);
-        $desc_intro = get_post_meta($post->ID, '_thankyou_desc_intro', true);
-        $desc_para1 = get_post_meta($post->ID, '_thankyou_desc_para1', true);
-        $desc_para2 = get_post_meta($post->ID, '_thankyou_desc_para2', true);
-        $desc_para3 = get_post_meta($post->ID, '_thankyou_desc_para3', true);
-        $stat1_number = get_post_meta($post->ID, '_thankyou_stat1_number', true);
-        $stat1_label = get_post_meta($post->ID, '_thankyou_stat1_label', true);
-        $stat2_number = get_post_meta($post->ID, '_thankyou_stat2_number', true);
-        $stat2_label = get_post_meta($post->ID, '_thankyou_stat2_label', true);
-        $stat3_number = get_post_meta($post->ID, '_thankyou_stat3_number', true);
-        $stat3_label = get_post_meta($post->ID, '_thankyou_stat3_label', true);
-        $button1_text = get_post_meta($post->ID, '_thankyou_button1_text', true);
-        $button1_url = get_post_meta($post->ID, '_thankyou_button1_url', true);
-        $button2_text = get_post_meta($post->ID, '_thankyou_button2_text', true);
-        $button2_url = get_post_meta($post->ID, '_thankyou_button2_url', true);
-        
-        // Handle images array
-        $carousel_images = get_post_meta($post->ID, '_thankyou_carousel_images', true);
-        $carousel_images_str = is_array($carousel_images) ? implode("\n", $carousel_images) : '';
-
-        ?>
-        <div class="thankyou-meta-wrapper" style="padding: 10px;">
-            <p><strong>Branding</strong></p>
-            <p>
-                <label for="thankyou_logo_url">Logo URL:</label><br>
-                <input type="text" id="thankyou_logo_url" name="thankyou_logo_url" value="<?php echo esc_attr($logo_url); ?>" class="widefat">
-            </p>
-            <p>
-                <label for="thankyou_main_heading">Main Heading:</label><br>
-                <input type="text" id="thankyou_main_heading" name="thankyou_main_heading" value="<?php echo esc_attr($main_heading); ?>" class="widefat">
-            </p>
-
-            <hr>
-            <p><strong>Description Paragraphs</strong></p>
-            <p>
-                <label for="thankyou_desc_intro">Intro (Bold):</label><br>
-                <input type="text" id="thankyou_desc_intro" name="thankyou_desc_intro" value="<?php echo esc_attr($desc_intro); ?>" class="widefat">
-            </p>
-            <p>
-                <label for="thankyou_desc_para1">Paragraph 1:</label><br>
-                <textarea id="thankyou_desc_para1" name="thankyou_desc_para1" class="widefat" rows="2"><?php echo esc_textarea($desc_para1); ?></textarea>
-            </p>
-            <p>
-                <label for="thankyou_desc_para2">Paragraph 2:</label><br>
-                <textarea id="thankyou_desc_para2" name="thankyou_desc_para2" class="widefat" rows="2"><?php echo esc_textarea($desc_para2); ?></textarea>
-            </p>
-            <p>
-                <label for="thankyou_desc_para3">Paragraph 3:</label><br>
-                <textarea id="thankyou_desc_para3" name="thankyou_desc_para3" class="widefat" rows="2"><?php echo esc_textarea($desc_para3); ?></textarea>
-            </p>
-
-            <hr>
-            <p><strong>Statistics</strong></p>
-            <table class="widefat" style="border: none;">
-                <tr>
-                    <td>
-                        <label>Stat 1 Number:</label><br>
-                        <input type="text" name="thankyou_stat1_number" value="<?php echo esc_attr($stat1_number); ?>">
-                    </td>
-                    <td>
-                        <label>Stat 1 Label:</label><br>
-                        <input type="text" name="thankyou_stat1_label" value="<?php echo esc_attr($stat1_label); ?>">
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <label>Stat 2 Number:</label><br>
-                        <input type="text" name="thankyou_stat2_number" value="<?php echo esc_attr($stat2_number); ?>">
-                    </td>
-                    <td>
-                        <label>Stat 2 Label:</label><br>
-                        <input type="text" name="thankyou_stat2_label" value="<?php echo esc_attr($stat2_label); ?>">
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <label>Stat 3 Number:</label><br>
-                        <input type="text" name="thankyou_stat3_number" value="<?php echo esc_attr($stat3_number); ?>">
-                    </td>
-                    <td>
-                        <label>Stat 3 Label:</label><br>
-                        <input type="text" name="thankyou_stat3_label" value="<?php echo esc_attr($stat3_label); ?>">
-                    </td>
-                </tr>
-            </table>
-
-            <hr>
-            <p><strong>Carousel Images</strong></p>
-            <p>
-                <label for="thankyou_carousel_images">Image URLs (one per line):</label><br>
-                <textarea id="thankyou_carousel_images" name="thankyou_carousel_images" class="widefat" rows="4"><?php echo esc_textarea($carousel_images_str); ?></textarea>
-            </p>
-
-            <hr>
-            <p><strong>Buttons</strong></p>
-            <table class="widefat" style="border: none;">
-                <tr>
-                    <td>
-                        <label>Button 1 (Primary) Text:</label><br>
-                        <input type="text" name="thankyou_button1_text" value="<?php echo esc_attr($button1_text); ?>">
-                    </td>
-                    <td>
-                        <label>Button 1 URL:</label><br>
-                        <input type="text" name="thankyou_button1_url" value="<?php echo esc_attr($button1_url); ?>">
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <label>Button 2 (Secondary) Text:</label><br>
-                        <input type="text" name="thankyou_button2_text" value="<?php echo esc_attr($button2_text); ?>">
-                    </td>
-                    <td>
-                        <label>Button 2 URL:</label><br>
-                        <input type="text" name="thankyou_button2_url" value="<?php echo esc_attr($button2_url); ?>">
-                    </td>
-                </tr>
-            </table>
-        </div>
-        <?php
-    }
-
-    /**
-     * Save the meta box values
-     */
-    public function save_thankyou_meta_boxes($post_id) {
-        if (!isset($_POST['thankyou_meta_nonce']) || !wp_verify_nonce($_POST['thankyou_meta_nonce'], 'save_thankyou_meta_boxes')) {
-            return;
-        }
-
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-            return;
-        }
-
-        if (!current_user_can('edit_post', $post_id)) {
-            return;
-        }
-
-        $fields = array(
-            'thankyou_logo_url' => '_thankyou_logo_url',
-            'thankyou_main_heading' => '_thankyou_main_heading',
-            'thankyou_desc_intro' => '_thankyou_desc_intro',
-            'thankyou_desc_para1' => '_thankyou_desc_para1',
-            'thankyou_desc_para2' => '_thankyou_desc_para2',
-            'thankyou_desc_para3' => '_thankyou_desc_para3',
-            'thankyou_stat1_number' => '_thankyou_stat1_number',
-            'thankyou_stat1_label' => '_thankyou_stat1_label',
-            'thankyou_stat2_number' => '_thankyou_stat2_number',
-            'thankyou_stat2_label' => '_thankyou_stat2_label',
-            'thankyou_stat3_number' => '_thankyou_stat3_number',
-            'thankyou_stat3_label' => '_thankyou_stat3_label',
-            'thankyou_button1_text' => '_thankyou_button1_text',
-            'thankyou_button1_url' => '_thankyou_button1_url',
-            'thankyou_button2_text' => '_thankyou_button2_text',
-            'thankyou_button2_url' => '_thankyou_button2_url'
-        );
-
-        foreach ($fields as $key => $meta_key) {
-            if (isset($_POST[$key])) {
-                update_post_meta($post_id, $meta_key, sanitize_text_field($_POST[$key]));
-            }
-        }
-
-        // Handle carousel images array
-        if (isset($_POST['thankyou_carousel_images'])) {
-            $images_raw = sanitize_textarea_field($_POST['thankyou_carousel_images']);
-            $images_array = array_filter(array_map('trim', explode("\n", $images_raw)));
-            update_post_meta($post_id, '_thankyou_carousel_images', $images_array);
-        }
+        // Redirect Settings
+        register_setting('appointment_scheduler_settings', 'appointment_thankyou_url');
     }
 
     
@@ -518,6 +332,8 @@ class Appointment_Scheduler {
             return 'booked';
         }
         
+        // Buffer Logic REMOVED for efficiency.
+        
         // Check blocked times
         $blocked_times = get_option('appointment_blocked_times', array());
         foreach ($blocked_times as $blocked) {
@@ -556,19 +372,38 @@ class Appointment_Scheduler {
         global $wpdb;
         $table_name = $wpdb->prefix . 'appointment_bookings';
         
-        // Get all booked dates for this month
         $start_date = sprintf('%04d-%02d-01', $year, $month);
         $end_date = date('Y-m-t', strtotime($start_date));
+
+        // Capacity Logic
+        $start_time_setting = get_option('appointment_start_time', '10:00');
+        $end_time_setting = get_option('appointment_end_time', '17:30');
+        $interval = intval(get_option('appointment_interval', 30));
         
-        $booked_dates = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT appointment_date FROM $table_name 
-             WHERE appointment_date >= %s AND appointment_date <= %s",
+        $start_ts = strtotime("2000-01-01 $start_time_setting");
+        $end_ts = strtotime("2000-01-01 $end_time_setting");
+        $total_minutes = ($end_ts - $start_ts) / 60;
+        $total_slots = floor($total_minutes / $interval);
+        
+        // Get booking counts per day
+        $daily_counts = $wpdb->get_results($wpdb->prepare(
+            "SELECT appointment_date, COUNT(*) as count FROM $table_name 
+             WHERE appointment_date >= %s AND appointment_date <= %s AND status != 'cancelled'
+             GROUP BY appointment_date",
             $start_date,
             $end_date
         ));
         
+        $fully_booked_dates = array();
+        foreach ($daily_counts as $row) {
+            // Only mark as booked if ALL slots are taken
+            if (intval($row->count) >= $total_slots) {
+                $fully_booked_dates[] = $row->appointment_date;
+            }
+        }
+        
         wp_send_json_success(array(
-            'booked_dates' => $booked_dates
+            'booked_dates' => $fully_booked_dates
         ));
     }
     
@@ -605,20 +440,34 @@ class Appointment_Scheduler {
         $date_formatted = date('F j, Y', strtotime($date));
         $time_formatted = date('g:i A', strtotime($time));
         
-        // Send email to admin - meet link will be added after saving
-        $admin_subject = sprintf('New Appointment Booking - %s', $date_formatted);
-        $admin_email_body = "A new appointment has been booked:\n\n";
-        $admin_email_body .= "Name: $name\n";
-        $admin_email_body .= "Email: $email\n";
-        $admin_email_body .= "Phone: " . ($phone ? $phone : 'Not provided') . "\n";
-        $admin_email_body .= "Date: $date_formatted\n";
-        $admin_email_body .= "Time: $time_formatted\n";
-        if ($message) {
-            $admin_email_body .= "Message: $message\n";
-        }
+        // Send email to admin - professional format
+        $admin_subject = sprintf('🔥 New Appointment: %s from %s', $date_formatted, $name);
+        
+        $admin_email_body = "Hello Admin,\n\n";
+        $admin_email_body .= "A new appointment has been scheduled through your website.\n\n";
+        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $admin_email_body .= "📅 APPOINTMENT INFO:\n";
+        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $admin_email_body .= "Date:     $date_formatted\n";
+        $admin_email_body .= "Time:     $time_formatted\n";
+        $admin_email_body .= "Meet:     [LINK_PLACEHOLDER]\n\n";
+        
+        $admin_email_body .= "👤 CUSTOMER DETAILS:\n";
+        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $admin_email_body .= "Name:     $name\n";
+        $admin_email_body .= "Email:    $email\n";
+        $admin_email_body .= "Phone:    " . ($phone ? $phone : 'Not provided') . "\n";
         if ($guest_emails) {
-            $admin_email_body .= "Guests: $guest_emails\n";
+            $admin_email_body .= "Guests:   $guest_emails\n";
         }
+        if ($message) {
+            $admin_email_body .= "Message:  $message\n";
+        }
+        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+        $admin_email_body .= "You can view and manage all appointments in your WordPress Dashboard under 'Appointments'.\n\n";
+        $admin_email_body .= "---\n";
+        $admin_email_body .= "Sent by Appointment Scheduler Plugin";
+
         // Generate cancellation token
         $cancellation_token = bin2hex(random_bytes(16));
         
@@ -626,56 +475,39 @@ class Appointment_Scheduler {
         $appointment_id = $this->save_appointment($name, $email, $phone, $date, $time, $message, $guest_emails, $cancellation_token);
         
         if (!$appointment_id) {
-            wp_send_json_error(array(
-                'message' => 'There was an error saving your appointment. Please try again.'
-            ));
+            wp_send_json_error(array('message' => 'Error saving to database.'));
         }
         
         // Generate cancellation link
         $cancel_link = home_url("/?appointment_action=cancel&id=$appointment_id&token=$cancellation_token");
-        
-        // Update Admin Email Body
-        $admin_email_body .= "\nGoogle Meet Link: \n"; // Placeholder
-        $admin_email_body .= "\n---\n";
-        $admin_email_body .= "This email was sent from your Appointment Scheduler plugin.";
 
-        // Send email to user (confirmation)
-        $user_subject = sprintf('Appointment Confirmation - %s', $date_formatted);
+        // Prepare User Confirmation Email
+        $user_subject = sprintf('Appointment Confirmation: %s at %s', $date_formatted, $time_formatted);
         $user_email_body = "Dear $name,\n\n";
-        $user_email_body .= "Thank you for booking an appointment with us!\n\n";
-        $user_email_body .= "Your appointment details:\n";
-        $user_email_body .= "Date: $date_formatted\n";
-        $user_email_body .= "Time: $time_formatted\n";
-        if ($phone) {
-            $user_email_body .= "Phone: $phone\n";
-        }
-        if ($message) {
-            $user_email_body .= "Your Message: $message\n";
-        }
-        $user_email_body .= "\n";
-        $user_email_body .= "Google Meet Link: \n"; // Placeholder
-        $user_email_body .= "We look forward to meeting with you!\n\n";
-        $user_email_body .= "To cancel this appointment, please click here:\n$cancel_link\n\n";
+        $user_email_body .= "This is a confirmation for your upcoming appointment.\n\n";
+        $user_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $user_email_body .= "📅 DETAILS:\n";
+        $user_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $user_email_body .= "Date:     $date_formatted\n";
+        $user_email_body .= "Time:     $time_formatted\n";
+        $user_email_body .= "Meet:     [LINK_PLACEHOLDER]\n";
+        $user_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+        
+        if ($phone) $user_email_body .= "Contact Phone: $phone\n";
+        $user_email_body .= "\nWe look forward to meeting with you!\n\n";
+        $user_email_body .= "CANCELLATION:\n";
+        $user_email_body .= "If you need to cancel, please use this link:\n$cancel_link\n\n";
         $user_email_body .= "---\n";
-        $user_email_body .= "This is an automated confirmation email from Appointment Scheduler.";
+        $user_email_body .= "Thank you for choosing $blog_name.";
 
-        // Prepare Headers - Fix "Unknown Sender"
-        $blog_name = get_bloginfo('name');
-        $headers = array(
-            'Content-Type: text/plain; charset=UTF-8',
-            "From: $blog_name <$admin_email>"
-        );
-        
-        // Get additional emails from settings (can be multiple emails separated by comma)
-        $additional_emails = get_option('appointment_additional_email', '');
-        
-        if (!$appointment_id) {
-            wp_send_json_error(array(
-                'message' => 'There was an error saving your appointment. Please try again.'
-            ));
+        // Prepare Headers
+        $headers = array('Content-Type: text/plain; charset=UTF-8');
+        if (!empty($admin_email)) {
+            $headers[] = "From: $blog_name <$from_email>";
+            $headers[] = "Reply-To: $admin_email";
         }
         
-        // Get the saved appointment with correct meet link
+        // Get the saved appointment
         global $wpdb;
         $table_name = $wpdb->prefix . 'appointment_bookings';
         $saved_appointment = $wpdb->get_row($wpdb->prepare(
@@ -686,46 +518,48 @@ class Appointment_Scheduler {
         // Use the saved meet link for emails
         $meet_link = !empty($saved_appointment->meet_link) ? $saved_appointment->meet_link : '';
         
-        // Update user email with correct meet link
+        // Inject correct meet link
         if ($meet_link) {
-            $user_email_body = str_replace("Google Meet Link: \n", "Google Meet Link: $meet_link\n", $user_email_body);
+            $user_email_body = str_replace("[LINK_PLACEHOLDER]", "$meet_link", $user_email_body);
+            $admin_email_body = str_replace("[LINK_PLACEHOLDER]", "$meet_link", $admin_email_body);
+        } else {
+            $user_email_body = str_replace("[LINK_PLACEHOLDER]", "Will be provided shortly", $user_email_body);
+            $admin_email_body = str_replace("[LINK_PLACEHOLDER]", "Meeting link missing", $admin_email_body);
         }
         
-        // Update admin email with correct meet link
-        if ($meet_link) {
-            $admin_email_body = str_replace("Google Meet Link: \n", "Google Meet Link: $meet_link\n", $admin_email_body);
+        // Send emails and log results
+        $admin_sent = false;
+        if (!empty($admin_email)) {
+            $admin_sent = wp_mail($admin_email, $admin_subject, $admin_email_body, $headers);
+            error_log("Appointment Scheduler: Admin email sent? " . ($admin_sent ? 'Yes' : 'No'));
         }
         
-        // Send emails
-        $admin_sent = wp_mail($admin_email, $admin_subject, $admin_email_body, $headers);
         $user_sent = wp_mail($email, $user_subject, $user_email_body, $headers);
+        error_log("Appointment Scheduler: User email sent? " . ($user_sent ? 'Yes' : 'No') . " to: $email");
         
         // Send email to additional emails if provided
-        $additional_sent = false;
         if (!empty($additional_emails)) {
-            // Split by comma and send to each email
             $email_array = array_map('trim', explode(',', $additional_emails));
             foreach ($email_array as $additional_email) {
                 if (is_email($additional_email)) {
-                    wp_mail($additional_email, $admin_subject, $admin_email_body, $headers);
-                    $additional_sent = true;
+                    $sent = wp_mail($additional_email, $admin_subject, $admin_email_body, $headers);
+                    error_log("Appointment Scheduler: Additional email sent to $additional_email? " . ($sent ? 'Yes' : 'No'));
                 }
             }
         }
         
         // Send email to guest emails if provided
         if (!empty($guest_emails)) {
-            // Split by comma and send to each email
             $guest_email_array = array_map('trim', explode(',', $guest_emails));
             foreach ($guest_email_array as $guest_email) {
                 if (is_email($guest_email)) {
-                    // Send user version of email to guests BUT REMOVE CANCELLATION LINK
                     $guest_body = str_replace(
                         "To cancel this appointment, please click here:\n$cancel_link\n\n", 
                         "", 
                         $user_email_body
                     );
-                    wp_mail($guest_email, $user_subject, $guest_body, $headers);
+                    $sent = wp_mail($guest_email, $user_subject, $guest_body, $headers);
+                    error_log("Appointment Scheduler: Guest email sent to $guest_email? " . ($sent ? 'Yes' : 'No'));
                 }
             }
         }
@@ -734,37 +568,34 @@ class Appointment_Scheduler {
         $google_event_created = false;
         $google_enabled = get_option('google_calendar_enabled', 'no');
         if ($google_enabled === 'yes' && $saved_appointment) {
+            error_log("Appointment Scheduler: Attempting to create Google Calendar event...");
             $api_meet_link = $this->create_google_calendar_event_api($saved_appointment);
             if ($api_meet_link) {
                 $google_event_created = true;
-                // Use the Meet link from Google Calendar API if available
                 if ($api_meet_link !== true) {
                     $meet_link = $api_meet_link;
                 }
+                error_log("Appointment Scheduler: Google Calendar event created successfully.");
+            } else {
+                error_log("Appointment Scheduler: Failed to create Google Calendar event.");
             }
         }
         
-        // Check if email is Google account for auto calendar add
         $is_google_account = $this->is_google_account($email);
         $calendar_link = '';
         if ($saved_appointment && !$google_event_created) {
-            // For user, create calendar link with admin as attendee (fallback to URL method)
             $calendar_link = $this->create_google_calendar_link($saved_appointment, false);
         }
         
-        if ($admin_sent) {
-            wp_send_json_success(array(
-                'message' => 'Your appointment has been booked successfully! A confirmation email has been sent to your email address.' . ($google_event_created ? ' Event has been automatically added to Google Calendar with Meet link.' : ''),
-                'meet_link' => $meet_link,
-                'is_google_account' => $is_google_account,
-                'calendar_link' => $calendar_link,
-                'google_event_created' => $google_event_created
-            ));
-        } else {
-            wp_send_json_error(array(
-                'message' => 'There was an error sending your appointment request. Please try again.'
-            ));
-        }
+        // Return success bundle
+        wp_send_json_success(array(
+            'message' => 'Your appointment has been booked successfully! A confirmation email has been sent to your email address.',
+            'meet_link' => $meet_link,
+            'is_google_account' => $is_google_account,
+            'calendar_link' => $calendar_link,
+            'google_event_created' => $google_event_created,
+            'email_sent' => $user_sent 
+        ));
     }
     
     private function save_appointment($name, $email, $phone, $date, $time, $message, $guest_emails = '', $token = '') {
@@ -855,24 +686,6 @@ class Appointment_Scheduler {
             'appointment-scheduler-settings',
             array($this, 'render_settings_page')
         );
-    }
-    
-    public function register_settings() {
-        register_setting('appointment_scheduler_settings', 'appointment_start_time');
-        register_setting('appointment_scheduler_settings', 'appointment_end_time');
-        register_setting('appointment_scheduler_settings', 'appointment_interval');
-        register_setting('appointment_scheduler_settings', 'appointment_admin_email');
-        register_setting('appointment_scheduler_settings', 'appointment_additional_email');
-        register_setting('appointment_scheduler_settings', 'appointment_timezone');
-        register_setting('appointment_scheduler_settings', 'appointment_blocked_times');
-        register_setting('appointment_scheduler_settings', 'appointment_reminder_enabled');
-        register_setting('appointment_scheduler_settings', 'appointment_reminder_times');
-        register_setting('appointment_scheduler_settings', 'google_calendar_client_id');
-        register_setting('appointment_scheduler_settings', 'google_calendar_client_secret');
-        register_setting('appointment_scheduler_settings', 'google_calendar_access_token');
-        register_setting('appointment_scheduler_settings', 'google_calendar_refresh_token');
-        register_setting('appointment_scheduler_settings', 'google_calendar_enabled');
-        register_setting('appointment_scheduler_settings', 'appointment_thankyou_page');
     }
     
     public function schedule_reminder_cron() {
@@ -1216,12 +1029,27 @@ class Appointment_Scheduler {
         if (isset($_GET['page']) && $_GET['page'] === 'appointment-scheduler-settings' && isset($_GET['google_oauth_callback'])) {
             if (isset($_GET['code'])) {
                 $code = sanitize_text_field($_GET['code']);
-                $this->exchange_oauth_code_for_tokens($code);
+                $success = $this->exchange_oauth_code_for_tokens($code);
+                
+                // Redirect to clean URL to avoid "invalid_grant" on refresh
+                $redirect_url = admin_url('admin.php?page=appointment-scheduler-settings');
+                if ($success) {
+                    $redirect_url = add_query_arg('google_connected', '1', $redirect_url);
+                }
+                wp_safe_redirect($redirect_url);
+                exit;
             } elseif (isset($_GET['error'])) {
                 add_action('admin_notices', function() {
                     echo '<div class="notice notice-error"><p>Google OAuth error: ' . esc_html($_GET['error']) . '</p></div>';
                 });
             }
+        }
+        
+        // Show success notice if redirected
+        if (isset($_GET['google_connected']) && $_GET['google_connected'] === '1') {
+            add_action('admin_notices', function() {
+                echo '<div class="notice notice-success is-dismissible"><p>Google Calendar connected successfully!</p></div>';
+            });
         }
         
         // Handle OAuth initiation
@@ -1230,7 +1058,7 @@ class Appointment_Scheduler {
         }
     }
     
-    private function initiate_google_oauth() {
+    public function initiate_google_oauth() {
         $client_id = get_option('google_calendar_client_id', '');
         $redirect_uri = admin_url('admin.php?page=appointment-scheduler-settings&google_oauth_callback=1');
         
@@ -1283,14 +1111,13 @@ class Appointment_Scheduler {
             if (isset($body['refresh_token'])) {
                 update_option('google_calendar_refresh_token', $body['refresh_token']);
             }
-            add_action('admin_notices', function() {
-                echo '<div class="notice notice-success"><p>Google Calendar connected successfully!</p></div>';
-            });
+            return true;
         } else {
             add_action('admin_notices', function() use ($body) {
                 $error = isset($body['error']) ? $body['error'] : 'Unknown error';
                 echo '<div class="notice notice-error"><p>Error: ' . esc_html($error) . '</p></div>';
             });
+            return false;
         }
     }
     
@@ -1596,6 +1423,56 @@ class Appointment_Scheduler {
         add_option('appointment_end_time', '17:30');
         add_option('appointment_interval', '30');
         add_option('appointment_admin_email', get_option('admin_email'));
+    }
+    
+    public function get_multi_day_slots() {
+        check_ajax_referer('appointment_scheduler_nonce', 'nonce');
+        
+        $start_date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : date('Y-m-d');
+        $days_count = isset($_POST['days']) ? intval($_POST['days']) : 3;
+        
+        $start_time_opt = get_option('appointment_start_time', '09:00');
+        $end_time_opt = get_option('appointment_end_time', '17:00');
+        $interval = intval(get_option('appointment_interval', 30));
+        
+        // Convert to minutes
+        $start_minutes = strtotime("1970-01-01 $start_time_opt UTC");
+        $end_minutes = strtotime("1970-01-01 $end_time_opt UTC");
+        
+        $result = array();
+        
+        for ($i = 0; $i < $days_count; $i++) {
+            $current_date = date('Y-m-d', strtotime("$start_date +$i days"));
+            $day_label = date('D j', strtotime($current_date)); // e.g., Wed 21
+            
+            $day_slots = array();
+            $current_slot_time = $start_minutes;
+            
+            while ($current_slot_time < $end_minutes) {
+                $time_str = date('H:i', $current_slot_time);
+                $display_time = date('g:ia', $current_slot_time);
+                
+                $status = $this->check_slot_status($current_date, $time_str);
+                
+                $day_slots[] = array(
+                    'time' => $time_str,
+                    'display' => $display_time,
+                    'status' => $status,
+                    'booked' => ($status === 'booked'),
+                    'past' => ($status === 'past')
+                );
+                
+                $current_slot_time += ($interval * 60);
+            }
+            
+            $result[] = array(
+                'date' => $current_date,
+                'label' => $day_label,
+                'slots' => $day_slots
+            );
+        }
+        
+        wp_send_json_success($result);
     }
 }
 

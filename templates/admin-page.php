@@ -75,10 +75,15 @@ if (!current_user_can('manage_options')) {
                         <td><?php echo esc_html($booking->message ? $booking->message : '-'); ?></td>
                         <td><?php echo esc_html(date('F j, Y g:i A', strtotime($booking->created_at))); ?></td>
                         <td>
+                            <button type="button" class="button button-small view-appointment" 
+                                     data-appointment='<?php echo esc_attr(json_encode($booking)); ?>'
+                                     title="View full details">
+                                View
+                            </button>
                             <button type="button" class="button button-small add-to-calendar" 
                                     data-appointment-id="<?php echo esc_attr($booking->id); ?>"
                                     aria-label="Add to Google Calendar"
-                                    title="Add to your Google Calendar (make sure you're logged in with admin account)">
+                                    title="Add to your Google Calendar">
                                 Add to My Calendar
                             </button>
                             <button type="button" class="button button-small delete-appointment" 
@@ -94,5 +99,19 @@ if (!current_user_can('manage_options')) {
     <?php else: ?>
         <p>No appointments booked yet.</p>
     <?php endif; ?>
+</div>
+
+<!-- Simple Admin Modal for Viewing Details -->
+<div id="appointment-details-modal" style="display:none; position:fixed; z-index:99999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5);">
+    <div style="background:#fff; margin:10% auto; padding:30px; border-radius:8px; width:500px; max-width:90%; position:relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+        <span id="close-details-modal" style="position:absolute; right:15px; top:10px; font-size:24px; cursor:pointer;">&times;</span>
+        <h2 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:15px;">Appointment Details</h2>
+        <div id="details-modal-content" style="line-height:1.6;">
+            <!-- Content will be injected by JS -->
+        </div>
+        <div style="margin-top:20px; text-align:right;">
+            <button type="button" class="button button-primary" id="close-details-button">Close</button>
+        </div>
+    </div>
 </div>
 

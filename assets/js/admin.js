@@ -166,6 +166,44 @@
                 }
             });
         });
+
+        // Handle view appointment
+        $(document).on('click', '.view-appointment', function(e) {
+            e.preventDefault();
+            const data = $(this).data('appointment');
+            
+            let html = '<div style="display:grid; grid-template-columns: 120px 1fr; gap: 10px;">';
+            html += '<strong>Name:</strong> <span>' + (data.name || '-') + '</span>';
+            html += '<strong>Email:</strong> <span>' + (data.email || '-') + '</span>';
+            html += '<strong>Phone:</strong> <span>' + (data.phone || '-') + '</span>';
+            html += '<strong>Date:</strong> <span>' + (data.appointment_date || '-') + '</span>';
+            html += '<strong>Time:</strong> <span>' + (data.appointment_time || '-') + '</span>';
+            html += '<strong>Guests:</strong> <span>' + (data.guest_emails || '-') + '</span>';
+            html += '<strong>Message:</strong> <span>' + (data.message || '-') + '</span>';
+            
+            if (data.meet_link) {
+                html += '<strong>Meet Link:</strong> <span><a href="' + data.meet_link + '" target="_blank">' + data.meet_link + '</a></span>';
+            }
+            
+            html += '<strong>Status:</strong> <span style="text-transform: capitalize;">' + (data.status || 'booked') + '</span>';
+            html += '<strong>Booked On:</strong> <span>' + (data.created_at || '-') + '</span>';
+            html += '</div>';
+            
+            $('#details-modal-content').html(html);
+            $('#appointment-details-modal').fadeIn(200);
+        });
+        
+        // Handle close modal
+        $(document).on('click', '#close-details-modal, #close-details-button', function() {
+            $('#appointment-details-modal').fadeOut(200);
+        });
+        
+        // Close on background click
+        $(document).on('click', '#appointment-details-modal', function(e) {
+            if (e.target === this) {
+                $(this).fadeOut(200);
+            }
+        });
     });
     
     // Show admin notice
