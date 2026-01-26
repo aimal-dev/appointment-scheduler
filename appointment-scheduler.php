@@ -435,6 +435,9 @@ class Appointment_Scheduler {
         
         // Get admin email from settings or use default
         $admin_email = get_option('appointment_admin_email', get_option('admin_email'));
+        $additional_emails = get_option('appointment_additional_email', '');
+        $blog_name = get_bloginfo('name');
+        $from_email = get_option('admin_email');
         
         // Format date and time
         $date_formatted = date('F j, Y', strtotime($date));
@@ -502,7 +505,7 @@ class Appointment_Scheduler {
 
         // Prepare Headers
         $headers = array('Content-Type: text/plain; charset=UTF-8');
-        if (!empty($admin_email)) {
+        if (!empty($from_email)) {
             $headers[] = "From: $blog_name <$from_email>";
             $headers[] = "Reply-To: $admin_email";
         }
