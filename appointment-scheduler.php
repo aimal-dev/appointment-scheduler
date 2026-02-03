@@ -443,33 +443,65 @@ class Appointment_Scheduler {
         $date_formatted = date('F j, Y', strtotime($date));
         $time_formatted = date('g:i A', strtotime($time));
         
-        // Send email to admin - professional format
-        $admin_subject = sprintf('🔥 New Appointment: %s from %s', $date_formatted, $name);
+        // Send email to admin - Google Calendar style
+        $admin_subject = sprintf('New Appointment: %s - %s', $name, $date_formatted);
         
-        $admin_email_body = "Hello Admin,\n\n";
-        $admin_email_body .= "A new appointment has been scheduled through your website.\n\n";
-        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        $admin_email_body .= "📅 APPOINTMENT INFO:\n";
-        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        $admin_email_body .= "Date:     $date_formatted\n";
-        $admin_email_body .= "Time:     $time_formatted\n";
-        $admin_email_body .= "Meet:     [LINK_PLACEHOLDER]\n\n";
-        
-        $admin_email_body .= "👤 CUSTOMER DETAILS:\n";
-        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        $admin_email_body .= "Name:     $name\n";
-        $admin_email_body .= "Email:    $email\n";
-        $admin_email_body .= "Phone:    " . ($phone ? $phone : 'Not provided') . "\n";
+        $admin_email_body = '
+        <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; color: #3c4043; line-height: 1.5;">
+            <h2 style="font-size: 24px; color: #202124; margin-bottom: 20px;">New Appointment Scheduled</h2>
+            <div style="background-color: #ffffff; padding: 24px; border: 1px solid #dadce0; border-radius: 8px;">
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 14px; font-weight: bold; color: #5f6368; margin-bottom: 4px;">WHEN</div>
+                    <div style="font-size: 18px; color: #3c4043;">' . $date_formatted . '</div>
+                    <div style="font-size: 18px; color: #3c4043;">' . $time_formatted . '</div>
+                </div>
+                
+                <div style="margin-bottom: 24px;">
+                     <div style="font-size: 14px; font-weight: bold; color: #5f6368; margin-bottom: 8px;">WHERE</div>
+                     <div>[LINK_PLACEHOLDER]</div>
+                </div>
+                
+                <div style="border-top: 1px solid #dadce0; margin: 20px 0;"></div>
+                
+                <div style="font-size: 14px; font-weight: bold; color: #5f6368; margin-bottom: 12px;">CLIENT DETAILS</div>
+                
+                <div style="display: flex; margin-bottom: 12px;">
+                    <div style="width: 80px; color: #70757a;">Name:</div>
+                    <div style="font-weight: 500;">' . esc_html($name) . '</div>
+                </div>
+                
+                <div style="display: flex; margin-bottom: 12px;">
+                    <div style="width: 80px; color: #70757a;">Email:</div>
+                    <div><a href="mailto:' . esc_attr($email) . '" style="color: #1a73e8; text-decoration: none;">' . esc_html($email) . '</a></div>
+                </div>
+                
+                <div style="display: flex; margin-bottom: 12px;">
+                    <div style="width: 80px; color: #70757a;">Phone:</div>
+                    <div>' . ($phone ? esc_html($phone) : 'Not provided') . '</div>
+                </div>';
+                
         if ($guest_emails) {
-            $admin_email_body .= "Guests:   $guest_emails\n";
+            $admin_email_body .= '
+                <div style="display: flex; margin-bottom: 12px;">
+                    <div style="width: 80px; color: #70757a;">Guests:</div>
+                    <div>' . esc_html($guest_emails) . '</div>
+                </div>';
         }
+        
         if ($message) {
-            $admin_email_body .= "Message:  $message\n";
+            $admin_email_body .= '
+                <div style="display: flex; margin-bottom: 12px;">
+                    <div style="width: 80px; color: #70757a;">Message:</div>
+                    <div>' . nl2br(esc_html($message)) . '</div>
+                </div>';
         }
-        $admin_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
-        $admin_email_body .= "You can view and manage all appointments in your WordPress Dashboard under 'Appointments'.\n\n";
-        $admin_email_body .= "---\n";
-        $admin_email_body .= "Sent by Appointment Scheduler Plugin";
+
+        $admin_email_body .= '
+            </div>
+            <p style="font-size: 12px; color: #70757a; margin-top: 20px; text-align: center;">
+                Sent via Appointment Scheduler
+            </p>
+        </div>';
 
         // Generate cancellation token
         $cancellation_token = bin2hex(random_bytes(16));
@@ -484,33 +516,80 @@ class Appointment_Scheduler {
         // Generate cancellation link
         $cancel_link = home_url("/?appointment_action=cancel&id=$appointment_id&token=$cancellation_token");
 
-        // Prepare User Confirmation Email
-        $user_subject = sprintf('Appointment Confirmation: %s at %s', $date_formatted, $time_formatted);
-        $user_email_body = "Dear $name,\n\n";
-        $user_email_body .= "This is a confirmation for your upcoming appointment.\n\n";
-        $user_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        $user_email_body .= "📅 DETAILS:\n";
-        $user_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        $user_email_body .= "Date:     $date_formatted\n";
-        $user_email_body .= "Time:     $time_formatted\n";
-        $user_email_body .= "Meet:     [LINK_PLACEHOLDER]\n";
-        $user_email_body .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+        // Prepare User Confirmation Email - Google Calendar style
+        $user_subject = sprintf('Invitation: Appointment @ %s %s', $date_formatted, $time_formatted);
         
-        if ($phone) $user_email_body .= "Contact Phone: $phone\n";
-        $user_email_body .= "\nWe look forward to meeting with you!\n\n";
-        $user_email_body .= "CANCELLATION:\n";
-        $user_email_body .= "If you need to cancel, please use this link:\n$cancel_link\n\n";
-        $user_email_body .= "---\n";
-        $user_email_body .= "Thank you for choosing $blog_name.";
+        $user_email_body = '
+        <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; color: #3c4043; line-height: 1.5;">
+            <div style="margin-bottom: 20px;">
+                <h2 style="font-size: 24px; color: #202124; margin: 0;">Appointment Confirmed</h2>
+                <p style="color: #70757a; margin-top: 8px;">We look forward to meeting with you.</p>
+            </div>
+            
+            <div style="background-color: #ffffff; padding: 24px; border: 1px solid #dadce0; border-radius: 8px;">
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 14px; font-weight: bold; color: #5f6368; margin-bottom: 4px;">WHEN</div>
+                    <div style="font-size: 18px; color: #3c4043;">' . $date_formatted . '</div>
+                    <div style="font-size: 18px; color: #3c4043;">' . $time_formatted . '</div>
+                </div>
+                
+                <div style="margin-bottom: 24px;">
+                     <div style="font-size: 14px; font-weight: bold; color: #5f6368; margin-bottom: 8px;">WHERE</div>
+                     <div>[LINK_PLACEHOLDER]</div>
+                </div>
+                
+                <div style="border-top: 1px solid #dadce0; margin: 20px 0;"></div>
+                
+                 <div style="display: flex; margin-bottom: 12px;">
+                    <div style="width: 80px; color: #70757a;">Who:</div>
+                    <div style="font-weight: 500;">' . get_bloginfo('name') . '</div>
+                </div>
+            </div>
 
-        // Prepare Headers
-        $headers = array('Content-Type: text/plain; charset=UTF-8');
-        if (!empty($from_email)) {
-            $headers[] = "From: $blog_name <$from_email>";
-            $headers[] = "Reply-To: $admin_email";
-        }
+            <div style="margin-top: 24px; text-align: center;">
+                <a href="' . $cancel_link . '" style="color: #70757a; text-decoration: underline; font-size: 12px;">Need ours cancel or reschedule? Click here</a>
+            </div>
+        </div>';
+
+        // Fetch Admin Email from Settings
+        $admin_email_setting = get_option('appointment_admin_email');
         
-        // Get the saved appointment
+        // Only use default if setting is absolutely empty
+        if (!empty($admin_email_setting)) {
+            $admin_email_final = trim($admin_email_setting);
+        } else {
+            $admin_email_final = get_option('admin_email');
+        }
+
+        // Fix "From" address to prevent DMARC blocking
+        // If From is a Gmail/Yahoo address, it will be blocked. We must use the domain name.
+        $server_name = isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'your-site.com';
+        // Strip www. if present
+        $server_name = str_replace('www.', '', $server_name);
+        $noreply_email = "noreply@" . $server_name;
+        
+        // Prepare Headers - Text/HTML
+        // User Headers: Sent from "No Reply", Reply-To = Admin
+        $user_headers = array('Content-Type: text/html; charset=UTF-8');
+        $user_headers[] = "From: $blog_name <$noreply_email>"; 
+        // Note: Using $noreply_email is safer than $from_email which might be @gmail.com
+        
+        if (!empty($admin_email_final)) {
+            $user_headers[] = "Reply-To: $admin_email_final";
+        }
+
+        // Admin Headers: Sent from "No Reply", Reply-To = Customer
+        $admin_headers = array('Content-Type: text/html; charset=UTF-8');
+        $admin_headers[] = "From: $blog_name <$noreply_email>";
+        $admin_headers[] = "Reply-To: $name <$email>";
+        
+        // Debug Log
+        error_log("Appointment Scheduler: Sending emails...");
+        error_log("Appointment Scheduler: From (Safe): $noreply_email");
+        error_log("Appointment Scheduler: User Email: $email");
+        error_log("Appointment Scheduler: Admin Email: $admin_email_final");
+        
+        // Get the saved appointment details
         global $wpdb;
         $table_name = $wpdb->prefix . 'appointment_bookings';
         $saved_appointment = $wpdb->get_row($wpdb->prepare(
@@ -518,51 +597,90 @@ class Appointment_Scheduler {
             $appointment_id
         ));
         
-        // Use the saved meet link for emails
+        // Use the saved meet link
         $meet_link = !empty($saved_appointment->meet_link) ? $saved_appointment->meet_link : '';
         
-        // Inject correct meet link
+        // Inject meet link placeholders with HTML button style
         if ($meet_link) {
-            $user_email_body = str_replace("[LINK_PLACEHOLDER]", "$meet_link", $user_email_body);
-            $admin_email_body = str_replace("[LINK_PLACEHOLDER]", "$meet_link", $admin_email_body);
+            $meet_btn = '<a href="' . $meet_link . '" style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 24px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 14px;">Join with Google Meet</a>';
+            $meet_btn .= '<div style="margin-top: 8px; font-size: 12px; color: #5f6368;">' . $meet_link . '</div>';
+            
+            $user_email_body = str_replace("[LINK_PLACEHOLDER]", $meet_btn, $user_email_body);
+            $admin_email_body = str_replace("[LINK_PLACEHOLDER]", $meet_btn, $admin_email_body);
         } else {
-            $user_email_body = str_replace("[LINK_PLACEHOLDER]", "Will be provided shortly", $user_email_body);
-            $admin_email_body = str_replace("[LINK_PLACEHOLDER]", "Meeting link missing", $admin_email_body);
+            $user_email_body = str_replace("[LINK_PLACEHOLDER]", '<span style="color: #70757a; font-style: italic;">Link will be provided shortly</span>', $user_email_body);
+            $admin_email_body = str_replace("[LINK_PLACEHOLDER]", '<span style="color: #d93025;">Meeting link missing</span>', $admin_email_body);
         }
         
-        // Send emails and log results
-        $admin_sent = false;
-        if (!empty($admin_email)) {
-            $admin_sent = wp_mail($admin_email, $admin_subject, $admin_email_body, $headers);
-            error_log("Appointment Scheduler: Admin email sent? " . ($admin_sent ? 'Yes' : 'No'));
+        // 1. Send to Admin
+        if (is_email($admin_email_final)) {
+            $admin_sent = wp_mail($admin_email_final, $admin_subject, $admin_email_body, $admin_headers);
+            
+            if ($admin_sent) {
+                 error_log("Appointment Scheduler: Admin email SENT successfully to $admin_email_final");
+            } else {
+                 error_log("Appointment Scheduler: Admin email FAILED to $admin_email_final. Headers: " . print_r($admin_headers, true));
+                 
+                 // Try one more time without ANY custom headers if first failed
+                 $retry = wp_mail($admin_email_final, $admin_subject, $admin_email_body);
+                 if ($retry) {
+                     error_log("Appointment Scheduler: Admin email retry without headers SENT.");
+                 } else {
+                     error_log("Appointment Scheduler: Admin email retry also FAILED.");
+                 }
+            }
+        } else {
+            error_log("Appointment Scheduler: Invalid Admin Email address: $admin_email_final");
         }
         
-        $user_sent = wp_mail($email, $user_subject, $user_email_body, $headers);
-        error_log("Appointment Scheduler: User email sent? " . ($user_sent ? 'Yes' : 'No') . " to: $email");
+        // 2. Send to User
+        $user_sent = wp_mail($email, $user_subject, $user_email_body, $user_headers);
+        if ($user_sent) {
+            error_log("Appointment Scheduler: User email SENT to $email");
+        } else {
+            error_log("Appointment Scheduler: User email FAILED to $email");
+        }
         
-        // Send email to additional emails if provided
+        // 3. Send to Additional Emails
         if (!empty($additional_emails)) {
-            $email_array = array_map('trim', explode(',', $additional_emails));
+            // Handle commas, spaces, and semicolons
+            $normalized_emails = str_replace(array(' ', ';'), ',', $additional_emails);
+            $email_array = array_map('trim', explode(',', $normalized_emails));
+            
             foreach ($email_array as $additional_email) {
                 if (is_email($additional_email)) {
-                    $sent = wp_mail($additional_email, $admin_subject, $admin_email_body, $headers);
-                    error_log("Appointment Scheduler: Additional email sent to $additional_email? " . ($sent ? 'Yes' : 'No'));
+                    // Send using Admin Headers
+                    $add_sent = wp_mail($additional_email, $admin_subject, $admin_email_body, $admin_headers);
+                    if ($add_sent) {
+                        error_log("Appointment Scheduler: Additional email SENT to $additional_email");
+                    } else {
+                        error_log("Appointment Scheduler: Additional email FAILED to $additional_email");
+                    }
                 }
             }
         }
         
-        // Send email to guest emails if provided
+        // 4. Send to Guest Emails
         if (!empty($guest_emails)) {
-            $guest_email_array = array_map('trim', explode(',', $guest_emails));
+            error_log("Appointment Scheduler: Processing guests: $guest_emails");
+            // Handle commas, spaces, and semicolons
+            $normalized_guests = str_replace(array(' ', ';'), ',', $guest_emails);
+            $guest_email_array = array_map('trim', explode(',', $normalized_guests));
+            
             foreach ($guest_email_array as $guest_email) {
                 if (is_email($guest_email)) {
-                    $guest_body = str_replace(
-                        "To cancel this appointment, please click here:\n$cancel_link\n\n", 
-                        "", 
-                        $user_email_body
-                    );
-                    $sent = wp_mail($guest_email, $user_subject, $guest_body, $headers);
-                    error_log("Appointment Scheduler: Guest email sent to $guest_email? " . ($sent ? 'Yes' : 'No'));
+                    // For guests, we don't need to parse/remove cancellation since we're using a cleaner HTML format
+                    // Just send the user body which is the invitation
+                    
+                    // Guests get same headers as User
+                    $guest_sent = wp_mail($guest_email, $user_subject, $user_email_body, $user_headers);
+                    if ($guest_sent) {
+                         error_log("Appointment Scheduler: Guest email SENT to $guest_email");
+                    } else {
+                         error_log("Appointment Scheduler: Guest email FAILED to $guest_email");
+                    }
+                } else {
+                    error_log("Appointment Scheduler: Invalid guest email: $guest_email");
                 }
             }
         }
