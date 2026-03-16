@@ -561,11 +561,15 @@ class Appointment_Scheduler {
             $admin_email_final = get_option('admin_email');
         }
 
-        // Fix "From" address to prevent DMARC blocking
-        // If From is a Gmail/Yahoo address, it will be blocked. We must use the domain name.
-        $server_name = isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'your-site.com';
+        // Get domain from home_url() which is more reliable than SERVER_NAME, especially on VPS/CLI
+        $url_parts = parse_url(home_url());
+        $server_name = isset($url_parts['host']) ? $url_parts['host'] : (isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : 'your-site.com');
+        
         // Strip www. if present
-        $server_name = str_replace('www.', '', $server_name);
+        if (substr($server_name, 0, 4) === 'www.') {
+            $server_name = substr($server_name, 4);
+        }
+        
         $noreply_email = "noreply@" . $server_name;
         
         // Prepare Headers - Text/HTML
@@ -621,8 +625,9 @@ class Appointment_Scheduler {
             } else {
                  error_log("Appointment Scheduler: Admin email FAILED to $admin_email_final. Headers: " . print_r($admin_headers, true));
                  
-                 // Try one more time without ANY custom headers if first failed
-                 $retry = wp_mail($admin_email_final, $admin_subject, $admin_email_body);
+                 // Try one more time without CUSTOM headers (but keep Content-Type) if first failed
+                 $retry_headers = array('Content-Type: text/html; charset=UTF-8');
+                 $retry = wp_mail($admin_email_final, $admin_subject, $admin_email_body, $retry_headers);
                  if ($retry) {
                      error_log("Appointment Scheduler: Admin email retry without headers SENT.");
                  } else {
