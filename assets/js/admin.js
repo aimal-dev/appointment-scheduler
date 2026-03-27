@@ -115,7 +115,7 @@
                 }
             });
         });
-        
+
         // Handle delete appointment
         $(document).on('click', '.delete-appointment', function(e) {
             e.preventDefault();
@@ -162,6 +162,55 @@
                 },
                 error: function() {
                     button.prop('disabled', false).text('Delete');
+                    showAdminNotice('An error occurred. Please try again.', 'error');
+                }
+            });
+        });
+
+        // Handle confirm cancellation
+        $(document).on('click', '.confirm-cancellation', function(e) {
+            e.preventDefault();
+            
+            const button = $(this);
+            const appointmentId = button.data('appointment-id');
+            const row = $('#appointment-row-' + appointmentId);
+            
+            if (!confirm('Are you sure you want to confirm this cancellation? This will notify the user.')) {
+                return;
+            }
+            
+            button.prop('disabled', true).text('Confirming...');
+            
+            $.ajax({
+                url: appointmentAdmin.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'confirm_cancellation',
+                    appointment_id: appointmentId,
+                    nonce: appointmentAdmin.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        showAdminNotice(response.data.message || 'Cancellation confirmed.', 'success');
+                        
+                        // Update status badge in the row
+                        const statusCell = row.find('.appointment-status');
+                        statusCell.removeClass('status-cancellation_requested').addClass('status-cancelled').text('Cancelled');
+                        
+                        // Clear the confirmation button
+                        button.remove();
+                        
+                        // Reload data to see changes
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        button.prop('disabled', false).text('Confirm Cancellation');
+                        showAdminNotice(response.data.message || 'Failed to confirm cancellation.', 'error');
+                    }
+                },
+                error: function() {
+                    button.prop('disabled', false).text('Confirm Cancellation');
                     showAdminNotice('An error occurred. Please try again.', 'error');
                 }
             });

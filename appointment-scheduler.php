@@ -59,6 +59,7 @@ class Appointment_Scheduler
         add_action('wp_ajax_google_calendar_auth', array($this, 'initiate_google_oauth'));
         add_action('wp_ajax_get_multi_day_slots', array($this, 'get_multi_day_slots'));
         add_action('wp_ajax_nopriv_get_multi_day_slots', array($this, 'get_multi_day_slots'));
+        add_action('wp_ajax_confirm_cancellation', array($this, 'ajax_confirm_cancellation'));
     }
 
     public function init()
@@ -116,20 +117,50 @@ class Appointment_Scheduler
             wp_die('This appointment has already been cancelled.');
         }
 
-        // Update status
+        if ($appointment->status === 'cancellation_requested') {
+            wp_die('A cancellation request for this appointment has already been sent to the administrator.', 'Request Already Sent');
+        }
+
+        // Update status to 'cancellation_requested'
         $wpdb->update(
             $table_name,
-            array('status' => 'cancelled'),
+            array('status' => 'cancellation_requested'),
             array('id' => $id),
             array('%s'),
             array('%d')
         );
 
-        // Send cancellation emails
-        $this->send_cancellation_emails($appointment);
+        // Send cancellation request email to admin
+        $this->send_cancellation_request_email($appointment);
 
         // Show success message
-        wp_die('Your appointment has been successfully cancelled. A confirmation email has been sent.', 'Appointment Cancelled');
+        wp_die('Your cancellation request has been sent to the administrator. They will process your request shortly.', 'Cancellation Request Sent');
+    }
+
+    private function send_cancellation_request_email($appointment)
+    {
+        $date_formatted = date('F j, Y', strtotime($appointment->appointment_date));
+        $time_formatted = date('g:i A', strtotime($appointment->appointment_time));
+        
+        $subject = sprintf('Cancellation Request: %s - %s', $appointment->name, $date_formatted);
+        $blog_name = get_bloginfo('name');
+        $admin_email = get_option('appointment_admin_email', get_option('admin_email'));
+        
+        $headers = array(
+            'Content-Type: text/plain; charset=UTF-8',
+            "From: $blog_name <$admin_email>"
+        );
+        
+        $admin_body = "Cancellation Request Received\n\n";
+        $admin_body .= "The following user has requested to cancel their appointment:\n\n";
+        $admin_body .= "Name: {$appointment->name}\n";
+        $admin_body .= "Email: {$appointment->email}\n";
+        $admin_body .= "Date: $date_formatted at $time_formatted\n\n";
+        $admin_body .= "Action Required: Please log in to your dashboard to confirm or deny this cancellation.\n";
+        $admin_body .= admin_url('admin.php?page=appointment-scheduler') . "\n\n";
+        $admin_body .= "---\nAppointment Scheduler";
+        
+        wp_mail($admin_email, $subject, $admin_body, $headers);
     }
 
     private function send_cancellation_emails($appointment)
@@ -1474,6 +1505,47 @@ class Appointment_Scheduler
         }
     }
 
+    public function ajax_confirm_cancellation()
+    {
+        check_ajax_referer('appointment_admin_nonce', 'nonce');
+
+        if (!$this->is_authorized_admin()) {
+            wp_send_json_error(array('message' => 'Unauthorized action.'));
+        }
+
+        $appointment_id = isset($_POST['appointment_id']) ? intval($_POST['appointment_id']) : 0;
+
+        if (empty($appointment_id)) {
+            wp_send_json_error(array('message' => 'Invalid appointment ID.'));
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'appointment_bookings';
+
+        $appointment = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d",
+            $appointment_id
+        ));
+
+        if (!$appointment) {
+            wp_send_json_error(array('message' => 'Appointment not found.'));
+        }
+
+        // Update status to 'cancelled'
+        $wpdb->update(
+            $table_name,
+            array('status' => 'cancelled'),
+            array('id' => $appointment_id),
+            array('%s'),
+            array('%d')
+        );
+
+        // Send final cancellation emails (already has the logic to notify user/guests/admin)
+        $this->send_cancellation_emails($appointment);
+
+        wp_send_json_success(array('message' => 'Appointment cancellation confirmed. Notifications sent.'));
+    }
+
     public function delete_appointment()
     {
         check_ajax_referer('appointment_admin_nonce', 'nonce');
@@ -1723,7 +1795,7 @@ class Appointment_Scheduler
         $user_email_body .= '<div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">';
         $user_email_body .= '<p style="font-size: 14px; color: #5f6368; margin-bottom: 15px;">Need to make changes to your appointment?</p>';
         $user_email_body .= '<a href="' . esc_url($modify_url) . '" style="display: inline-block; background-color: #fff; color: #1a73e8; border: 1px solid #dadce0; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 14px; margin-right: 10px;">Modify Appointment</a>';
-        $user_email_body .= '<a href="' . esc_url($cancel_url) . '" style="display: inline-block; background-color: #fff; color: #d93025; border: 1px solid #dadce0; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 14px;">Cancel Appointment</a>';
+        $user_email_body .= '<a href="' . esc_url($cancel_url) . '" style="display: inline-block; background-color: #fff; color: #d93025; border: 1px solid #dadce0; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 14px;">Request Cancellation</a>';
         $user_email_body .= '</div>';
 
         $user_email_body .= '<p style="margin-top: 25px;">Thank you for using our service.</p></div>';

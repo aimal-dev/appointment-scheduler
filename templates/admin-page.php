@@ -31,6 +31,7 @@ if (!$is_authorized_admin) {
                     <th>Meet Link</th>
                     <th>Message</th>
                     <th>Booked On</th>
+                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -88,7 +89,16 @@ if (!$is_authorized_admin) {
                             </div>
                         </td>
                         <td><?php echo esc_html($booking->message ? $booking->message : '-'); ?></td>
-                        <td><?php echo esc_html(date('F j, Y g:i A', strtotime($booking->created_at))); ?></td>
+                        <td>
+                            <?php 
+                            $status = isset($booking->status) ? $booking->status : 'booked';
+                            $status_label = ucwords(str_replace('_', ' ', $status));
+                            $status_class = 'status-' . sanitize_html_class($status);
+                            ?>
+                            <span class="appointment-status <?php echo esc_attr($status_class); ?>">
+                                <?php echo esc_html($status_label); ?>
+                            </span>
+                        </td>
                         <td>
                             <button type="button" class="button button-small view-appointment" 
                                      data-appointment='<?php echo esc_attr(json_encode($booking)); ?>'
@@ -112,6 +122,13 @@ if (!$is_authorized_admin) {
                                         aria-label="Delete appointment">
                                     Delete
                                 </button>
+                                <?php if ($status === 'cancellation_requested'): ?>
+                                    <button type="button" class="button button-small button-primary confirm-cancellation" 
+                                            data-appointment-id="<?php echo esc_attr($booking->id); ?>"
+                                            style="background-color: #d93025; border-color: #d93025;">
+                                        Confirm Cancellation
+                                    </button>
+                                <?php endif; ?>
                             <?php
         endif; ?>
                         </td>

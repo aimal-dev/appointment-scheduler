@@ -685,3 +685,30 @@
   cursor: default;
 }
 
+/* Admin Dashboard Status Badges */
+.appointment-status {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.status-booked {
+  background-color: #e6f4ea;
+  color: #137333;
+}
+
+.status-cancelled {
+  background-color: #fce8e6;
+  color: #c5221f;
+}
+
+.status-cancellation_requested {
+  background-color: #fef7e0;
+  color: #b06000;
+  border: 1px solid #f9ab00;
+}
+
