@@ -35,6 +35,7 @@ if (isset($_POST['submit'])) {
         update_option('appointment_timezone', sanitize_text_field($_POST['appointment_timezone']));
         update_option('appointment_reminder_enabled', isset($_POST['appointment_reminder_enabled']) ? 'yes' : 'no');
         update_option('appointment_reminder_times', isset($_POST['appointment_reminder_times']) ? $_POST['appointment_reminder_times'] : array());
+        update_option('appointment_enable_weekends', isset($_POST['appointment_enable_weekends']) ? 'yes' : 'no');
         
         // Google Calendar
         update_option('google_calendar_client_id', sanitize_text_field($_POST['google_calendar_client_id']));
@@ -110,6 +111,7 @@ $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'general';
             $reminder_enabled = get_option('appointment_reminder_enabled', 'yes');
             $reminder_times = get_option('appointment_reminder_times', array('15min', '1hr', '1day'));
             if (!is_array($reminder_times)) $reminder_times = array();
+            $enable_weekends = get_option('appointment_enable_weekends', 'no');
             // Google
             $google_client_id = get_option('google_calendar_client_id', '');
             $google_client_secret = get_option('google_calendar_client_secret', '');
@@ -138,6 +140,13 @@ $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'general';
                     <td>
                         <input type="text" name="appointment_additional_email" value="<?php echo esc_attr($additional_email); ?>" class="regular-text">
                         <p class="description">Comma separated.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Weekends</th>
+                    <td>
+                        <label><input type="checkbox" name="appointment_enable_weekends" value="yes" <?php checked($enable_weekends, 'yes'); ?>> Enable Saturday & Sunday Bookings</label>
+                        <p class="description">If unchecked, weekends will be marked as "Office Closed".</p>
                     </td>
                 </tr>
                  <tr>

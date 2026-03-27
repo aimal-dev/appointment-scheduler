@@ -671,3 +671,17 @@
   padding: 14px !important;
 }
 
+.time-slot.closed {
+  background: #f8f9fa !important;
+  color: #70757a !important;
+  cursor: not-allowed !important;
+  border-color: #dadce0 !important;
+  font-size: 11px !important;
+}
+
+.calendar-day.closed {
+  background: #f1f3f4 !important;
+  color: #bdc1c6;
+  cursor: default;
+}
+

@@ -151,10 +151,19 @@ if (!empty($appointment_timezone)) {
         <div class="appointment-modal-content">
             <span class="appointment-modal-close">&times;</span>
             <div id="formMessage" style="display:none; padding: 10px; margin-bottom: 20px; border-radius: 4px;"></div>
-            <h3 id="modalTitle">Complete Your Booking</h3>
+            <h3 id="modalTitle"><?php echo isset($modify_data) ? 'Modify Your Appointment' : 'Complete Your Booking'; ?></h3>
+            <?php if (isset($modify_data)): ?>
+                <div style="background-color: #e8f0fe; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; color: #1967d2;">
+                    <strong>Modifying:</strong> You are changing your existing appointment.
+                </div>
+            <?php endif; ?>
             <form id="appointmentForm" class="appointment-form">
                 <input type="hidden" id="selectedDate" name="date" value="">
                 <input type="hidden" id="selectedTime" name="time" value="">
+                <?php if (isset($modify_data)): ?>
+                    <input type="hidden" id="modifyId" name="modify_id" value="<?php echo esc_attr($modify_data['id']); ?>">
+                    <input type="hidden" id="modifyToken" name="modify_token" value="<?php echo esc_attr($modify_data['token']); ?>">
+                <?php endif; ?>
                 
                 <div class="form-group">
                     <label for="appointmentName">Name <span class="required">*</span></label>

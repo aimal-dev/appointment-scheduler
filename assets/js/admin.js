@@ -193,13 +193,75 @@
             $('#appointment-details-modal').fadeIn(200);
         });
         
-        // Handle close modal
+        // Handle edit appointment
+        $(document).on('click', '.edit-appointment', function(e) {
+            e.preventDefault();
+            const data = $(this).data('appointment');
+            
+            // Populate form fields
+            $('#edit-appointment-id').val(data.id || '');
+            $('#edit-name').val(data.name || '');
+            $('#edit-email').val(data.email || '');
+            $('#edit-phone').val(data.phone || '');
+            $('#edit-guests').val(data.guest_emails || '');
+            $('#edit-date').val(data.appointment_date || '');
+            $('#edit-time').val(data.appointment_time || '');
+            $('#edit-meet-link').val(data.meet_link || '');
+            $('#edit-message').val(data.message || '');
+            
+            $('#edit-appointment-modal').fadeIn(200);
+        });
+        
+        // Handle close edit modal
+        $(document).on('click', '#close-edit-modal, #cancel-edit-button', function() {
+            $('#edit-appointment-modal').fadeOut(200);
+        });
+        
+        // Handle edit form submission
+        $('#edit-appointment-form').on('submit', function(e) {
+            e.preventDefault();
+            
+            const submitBtn = $('#save-edit-button');
+            const originalText = submitBtn.text();
+            
+            submitBtn.prop('disabled', true).text('Updating...');
+            
+            const formData = $(this).serializeArray();
+            formData.push({ name: 'action', value: 'update_appointment' });
+            formData.push({ name: 'nonce', value: appointmentAdmin.nonce });
+            
+            $.ajax({
+                url: appointmentAdmin.ajax_url,
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    if (response.success) {
+                        showAdminNotice(response.data.message || 'Appointment updated successfully.', 'success');
+                        $('#edit-appointment-modal').fadeOut(200);
+                        
+                        // Reload data or page to see changes
+                        setTimeout(function() {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        submitBtn.prop('disabled', false).text(originalText);
+                        showAdminNotice(response.data.message || 'Failed to update appointment.', 'error');
+                    }
+                },
+                error: function() {
+                    submitBtn.prop('disabled', false).text(originalText);
+                    showAdminNotice('An error occurred. Please try again.', 'error');
+                }
+            });
+        });
+        
+        // Handle close details modal
         $(document).on('click', '#close-details-modal, #close-details-button', function() {
             $('#appointment-details-modal').fadeOut(200);
         });
         
-        // Close on background click
-        $(document).on('click', '#appointment-details-modal', function(e) {
+        // Close modals on background click
+        $(document).on('click', '#appointment-details-modal, #edit-appointment-modal', function(e) {
             if (e.target === this) {
                 $(this).fadeOut(200);
             }

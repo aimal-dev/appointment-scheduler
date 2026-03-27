@@ -170,13 +170,18 @@
             const dateStr = formatDate(date);
             const isPast = date < today && dateStr !== todayStr;
             const isBooked = bookedDates.includes(dateStr);
-            const isAvailable = !isPast && !isBooked && isDateAvailable(date);
+            const isWeekday = date.getDay() !== 0 && date.getDay() !== 6;
+            const isWeekendEnabled = appointmentScheduler.enable_weekends === 'yes';
+            const isAvailable = !isPast && !isBooked && (isWeekday || isWeekendEnabled);
+            const isClosed = !isPast && !isWeekday && !isWeekendEnabled;
             
             let classes = 'calendar-day';
             if (isPast) {
                 classes += ' past';
             } else if (isBooked) {
                 classes += ' booked';
+            } else if (isClosed) {
+                classes += ' closed';
             } else if (isAvailable) {
                 classes += ' available';
             }
@@ -274,6 +279,13 @@
                                                 <span class="slot-status">Booked</span>
                                             </div>
                                         `;
+                                    } else if (slot.status === 'closed') {
+                                        slotsHtml += `
+                                            <div class="time-slot closed" title="Office Closed">
+                                                <span class="slot-time">${slot.display}</span>
+                                                <span class="slot-status">Office Closed</span>
+                                            </div>
+                                        `;
                                     } else {
                                         slotsHtml += `
                                             <div class="time-slot available" 
@@ -350,6 +362,16 @@
         $('#selectedTime').val(time);
         $('#selectedAppointmentDisplay').text(dateFormatted + ' at ' + timeFormattedStart + ' - ' + timeFormattedEnd);
         
+        // If in modification mode, pre-fill and disable some fields
+        if (typeof appointmentModifyData !== 'undefined' && appointmentModifyData) {
+            $('#appointmentName').val(appointmentModifyData.name).prop('readonly', true);
+            $('#appointmentEmail').val(appointmentModifyData.email).prop('readonly', true);
+            $('#appointmentPhone').val(appointmentModifyData.phone);
+            $('#appointmentGuests').val(appointmentModifyData.guest_emails);
+            $('#appointmentMessage').val(appointmentModifyData.message);
+            $('.btn-submit').text('Update Appointment');
+        }
+
         $('#appointmentModal').addClass('show');
         $('body').css('overflow', 'hidden');
     }
@@ -359,12 +381,22 @@
         $('body').css('overflow', '');
         $('#formMessage').removeClass('success error').hide();
         $('#appointmentForm')[0].reset();
+        
+        // Reset modify mode changes
+        $('#appointmentName').prop('readonly', false);
+        $('#appointmentEmail').prop('readonly', false);
+        $('.btn-submit').text('Confirm Booking');
     }
     
     function submitAppointment() {
+        const isModify = typeof appointmentModifyData !== 'undefined' && appointmentModifyData;
+        const submitBtn = $('.btn-submit');
+        
         const formData = {
-            action: 'submit_appointment',
+            action: isModify ? 'modify_appointment' : 'submit_appointment',
             nonce: appointmentScheduler.nonce,
+            id: isModify ? appointmentModifyData.id : null,
+            token: isModify ? appointmentModifyData.token : null,
             name: $('#appointmentName').val(),
             email: $('#appointmentEmail').val(),
             phone: $('#appointmentPhone').val(),
@@ -374,7 +406,7 @@
             message: $('#appointmentMessage').val()
         };
         
-        $('.btn-submit').prop('disabled', true).text('Booking...');
+        submitBtn.prop('disabled', true).text(isModify ? 'Updating...' : 'Booking...');
         
         $.ajax({
             url: appointmentScheduler.ajax_url,
@@ -453,7 +485,12 @@
         // Check if date is at least today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        return date >= today;
+        
+        // Check if weekend enabled
+        const isWeekday = date.getDay() !== 0 && date.getDay() !== 6;
+        const isWeekendEnabled = appointmentScheduler.enable_weekends === 'yes';
+        
+        return date >= today && (isWeekday || isWeekendEnabled);
     }
     
     // Cache for booked dates
